@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../shared/common" },
+    { "path": "../shared/config" },
+    { "path": "../shared/logging" },
+    { "path": "../shared/observability" }
+  ]
+}

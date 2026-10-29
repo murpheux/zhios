@@ -1,0 +1,19 @@
+{
+  "name": "gnee/ios",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bullseye",
+  "workspaceFolder": "/workspace/gnee",
+  "workspaceMount": "source=${localWorkspaceFolder}/../..,target=/workspace/gnee,type=bind,consistency=cached",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  },
+  "postCreateCommand": "npm install",
+  "forwardPorts": [8081, 19000, 19001, 19002],
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "msjsdiag.vscode-react-native"]
+    }
+  },
+  "remoteEnv": {
+    "NODE_ENV": "development"
+  }
+}

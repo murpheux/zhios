@@ -1,0 +1,30 @@
+# Swarm-mode stack file — deploy with:
+#   docker stack deploy -c infrastructure/docker/web-spa-stack.yml gnee
+# Unlike `docker build` on a single host, swarm workers pull `image:` from a
+# registry — they never see the manager's local build cache. Push first (see
+# scripts/deploy-swarm.sh), then deploy.
+services:
+  web-spa:
+    image: ${REGISTRY:?set REGISTRY, e.g. scarlet:5000}/gnee/web-spa:${IMAGE_TAG:-latest}
+    ports:
+      - "8080:8080"
+    networks:
+      - gnee-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      update_config:
+        order: start-first
+        parallelism: 1
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+
+networks:
+  gnee-net:
+    driver: overlay

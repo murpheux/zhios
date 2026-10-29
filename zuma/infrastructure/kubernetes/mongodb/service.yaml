@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: zuma
+  labels:
+    app: mongodb
+spec:
+  # Headless so the StatefulSet pod gets a stable DNS name (mongodb-0.mongodb.zuma.svc.cluster.local)
+  clusterIP: None
+  selector:
+    app: mongodb
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017

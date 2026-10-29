@@ -1,0 +1,157 @@
+# Run from zuma/ root: docker compose up --build
+# Build contexts are "." (repo root) because services/* and graphql/ depend on shared/*
+# npm workspace packages — see infrastructure/docker/*.Dockerfile for details.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-zuma_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    ports:
+      # Bound to localhost only — Mongo must never be reachable from outside the host
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "-u", "${MONGO_ROOT_USERNAME:-zuma_admin}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - zuma-net
+
+  # One-shot: initiates the single-node replica set once, then exits.
+  mongo-init:
+    image: mongo:7
+    restart: "no"
+    env_file:
+      - .env
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        mongosh --host mongo -u "${MONGO_ROOT_USERNAME:-zuma_admin}" -p "${MONGO_ROOT_PASSWORD}"
+        --authenticationDatabase admin --quiet --eval
+        'try { rs.status(); } catch (e) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}); }'
+    networks:
+      - zuma-net
+
+  wallet-service:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/wallet-service.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      LOG_LEVEL: info
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD}@mongo:27017/zuma-wallet?replicaSet=rs0&authSource=admin
+      # Placeholder only — inject the real value via an env file or secret manager, never commit it
+      JWT_SECRET: CHANGE_ME_32_CHAR_MINIMUM_PLACEHOLDER_SECRET
+      JWT_ISSUER: zuma
+      # No otel-collector service is included in this compose file; exporter calls will fail silently
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      METRICS_ENABLED: "true"
+      TRANSACTION_SERVICE_URL: http://transaction-service:3002
+    env_file:
+      - .env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - zuma-net
+
+  transaction-service:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/transaction-service.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: production
+      PORT: "3002"
+      LOG_LEVEL: info
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD}@mongo:27017/zuma-transaction?replicaSet=rs0&authSource=admin
+      JWT_SECRET: CHANGE_ME_32_CHAR_MINIMUM_PLACEHOLDER_SECRET
+      JWT_ISSUER: zuma
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      METRICS_ENABLED: "true"
+      WALLET_SERVICE_URL: http://wallet-service:3001
+      BITCOIN_NETWORK: testnet
+    env_file:
+      - .env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      wallet-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3002/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - zuma-net
+
+  graphql-gateway:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/graphql-gateway.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: production
+      PORT: "3003"
+      LOG_LEVEL: info
+      # Unused by the gateway's own logic but required by the shared env schema
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD}@mongo:27017/zuma-graphql?replicaSet=rs0&authSource=admin
+      JWT_SECRET: CHANGE_ME_32_CHAR_MINIMUM_PLACEHOLDER_SECRET
+      JWT_ISSUER: zuma
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      METRICS_ENABLED: "true"
+      WALLET_SERVICE_URL: http://wallet-service:3001
+      TRANSACTION_SERVICE_URL: http://transaction-service:3002
+    env_file:
+      - .env
+    depends_on:
+      wallet-service:
+        condition: service_healthy
+      transaction-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3003/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - zuma-net
+
+networks:
+  zuma-net:
+    driver: bridge
+
+volumes:
+  mongo-data:

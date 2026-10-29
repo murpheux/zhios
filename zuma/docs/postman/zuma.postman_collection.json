@@ -1,0 +1,628 @@
+{
+  "info": {
+    "name": "Zuma Platform API",
+    "description": "REST + GraphQL requests for the Zuma Bitcoin wallet/transaction microservices platform. Import docs/postman/zuma-local.postman_environment.json alongside this collection and set the `jwtToken` environment variable before running authenticated requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{jwtToken}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Wallet Service",
+      "item": [
+        {
+          "name": "Create Wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"My Hot Wallet\",\n  \"network\": \"testnet\",\n  \"type\": \"hot\",\n  \"ownerUserId\": \"user-123\",\n  \"metadata\": { \"purpose\": \"payroll\" }\n}"
+            },
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/api/v1/wallets",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["api", "v1", "wallets"]
+            },
+            "description": "Create a new wallet."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"label\": \"My Hot Wallet\",\n  \"network\": \"testnet\",\n  \"type\": \"hot\",\n  \"ownerUserId\": \"user-123\",\n  \"metadata\": { \"purpose\": \"payroll\" }\n}"
+                },
+                "url": {
+                  "raw": "{{walletServiceBaseUrl}}/api/v1/wallets",
+                  "host": ["{{walletServiceBaseUrl}}"],
+                  "path": ["api", "v1", "wallets"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"label\": \"My Hot Wallet\",\n  \"address\": \"tb1q...\",\n  \"network\": \"testnet\",\n  \"type\": \"hot\",\n  \"balanceCache\": \"0\",\n  \"metadata\": { \"purpose\": \"payroll\" },\n  \"ownerUserId\": \"user-123\",\n  \"status\": \"active\",\n  \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n  \"updatedAt\": \"2024-10-13T12:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Wallet By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["api", "v1", "wallets", "{{walletId}}"]
+            },
+            "description": "Fetch a wallet by id."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}",
+                  "host": ["{{walletServiceBaseUrl}}"],
+                  "path": ["api", "v1", "wallets", "{{walletId}}"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"label\": \"My Hot Wallet\",\n  \"address\": \"tb1q...\",\n  \"network\": \"testnet\",\n  \"type\": \"hot\",\n  \"balanceCache\": \"0\",\n  \"metadata\": {},\n  \"ownerUserId\": \"user-123\",\n  \"status\": \"active\",\n  \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n  \"updatedAt\": \"2024-10-13T12:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Wallets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/api/v1/wallets?page=1&limit=20&ownerUserId=user-123",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["api", "v1", "wallets"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "ownerUserId", "value": "user-123" }
+              ]
+            },
+            "description": "List wallets with pagination."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{walletServiceBaseUrl}}/api/v1/wallets?page=1&limit=20&ownerUserId=user-123",
+                  "host": ["{{walletServiceBaseUrl}}"],
+                  "path": ["api", "v1", "wallets"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "ownerUserId", "value": "user-123" }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"items\": [\n    {\n      \"id\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n      \"label\": \"My Hot Wallet\",\n      \"address\": \"tb1q...\",\n      \"network\": \"testnet\",\n      \"type\": \"hot\",\n      \"balanceCache\": \"0\",\n      \"metadata\": {},\n      \"ownerUserId\": \"user-123\",\n      \"status\": \"active\",\n      \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n      \"updatedAt\": \"2024-10-13T12:00:00.000Z\"\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 20,\n  \"totalPages\": 1\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Wallet Metadata",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Renamed Hot Wallet\",\n  \"metadata\": { \"purpose\": \"payroll\", \"note\": \"updated\" }\n}"
+            },
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}/metadata",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["api", "v1", "wallets", "{{walletId}}", "metadata"]
+            },
+            "description": "Update a wallet's label/metadata."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"label\": \"Renamed Hot Wallet\",\n  \"metadata\": { \"purpose\": \"payroll\", \"note\": \"updated\" }\n}"
+                },
+                "url": {
+                  "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}/metadata",
+                  "host": ["{{walletServiceBaseUrl}}"],
+                  "path": ["api", "v1", "wallets", "{{walletId}}", "metadata"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"label\": \"Renamed Hot Wallet\",\n  \"address\": \"tb1q...\",\n  \"network\": \"testnet\",\n  \"type\": \"hot\",\n  \"balanceCache\": \"0\",\n  \"metadata\": { \"purpose\": \"payroll\", \"note\": \"updated\" },\n  \"ownerUserId\": \"user-123\",\n  \"status\": \"active\",\n  \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n  \"updatedAt\": \"2024-10-13T12:05:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Wallet Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}/balance",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["api", "v1", "wallets", "{{walletId}}", "balance"]
+            },
+            "description": "Fetch a wallet's cached balance."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}/balance",
+                  "host": ["{{walletServiceBaseUrl}}"],
+                  "path": ["api", "v1", "wallets", "{{walletId}}", "balance"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"walletId\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"balanceCache\": \"0\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Wallet Transaction History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}/transactions",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["api", "v1", "wallets", "{{walletId}}", "transactions"]
+            },
+            "description": "Fetch a wallet's transaction history (proxies to transaction-service)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{walletServiceBaseUrl}}/api/v1/wallets/{{walletId}}/transactions",
+                  "host": ["{{walletServiceBaseUrl}}"],
+                  "path": ["api", "v1", "wallets", "{{walletId}}", "transactions"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "[\n  {\n    \"id\": \"6710f1f1c2a1b2c3d4e5f6a8\",\n    \"walletId\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n    \"txid\": null,\n    \"type\": \"send\",\n    \"amount\": \"0.001\",\n    \"feeRate\": \"12\",\n    \"status\": \"pending\",\n    \"confirmations\": 0,\n    \"rawTx\": \"rawtx:...:signed\",\n    \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n    \"updatedAt\": \"2024-10-13T12:00:00.000Z\"\n  }\n]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Transaction Service",
+      "item": [
+        {
+          "name": "Create Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletId\": \"{{walletId}}\",\n  \"type\": \"send\",\n  \"amount\": \"0.001\",\n  \"feeRate\": \"12\",\n  \"destinationAddress\": \"tb1q...\"\n}"
+            },
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["api", "v1", "transactions"]
+            },
+            "description": "Create (build + sign) a new transaction."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"walletId\": \"{{walletId}}\",\n  \"type\": \"send\",\n  \"amount\": \"0.001\",\n  \"feeRate\": \"12\",\n  \"destinationAddress\": \"tb1q...\"\n}"
+                },
+                "url": {
+                  "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions",
+                  "host": ["{{transactionServiceBaseUrl}}"],
+                  "path": ["api", "v1", "transactions"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"6710f1f1c2a1b2c3d4e5f6a8\",\n  \"walletId\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"txid\": null,\n  \"type\": \"send\",\n  \"amount\": \"0.001\",\n  \"feeRate\": \"12\",\n  \"status\": \"pending\",\n  \"confirmations\": 0,\n  \"rawTx\": \"rawtx:...:signed\",\n  \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n  \"updatedAt\": \"2024-10-13T12:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Validate Transaction",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}/validate",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["api", "v1", "transactions", "{{transactionId}}", "validate"]
+            },
+            "description": "Validate a pending transaction is ready to broadcast."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}/validate",
+                  "host": ["{{transactionServiceBaseUrl}}"],
+                  "path": ["api", "v1", "transactions", "{{transactionId}}", "validate"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"6710f1f1c2a1b2c3d4e5f6a8\",\n  \"walletId\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"txid\": null,\n  \"type\": \"send\",\n  \"amount\": \"0.001\",\n  \"feeRate\": \"12\",\n  \"status\": \"pending\",\n  \"confirmations\": 0,\n  \"rawTx\": \"rawtx:...:signed\",\n  \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n  \"updatedAt\": \"2024-10-13T12:01:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Broadcast Transaction",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}/broadcast",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["api", "v1", "transactions", "{{transactionId}}", "broadcast"]
+            },
+            "description": "Broadcast a validated transaction to the network."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}/broadcast",
+                  "host": ["{{transactionServiceBaseUrl}}"],
+                  "path": ["api", "v1", "transactions", "{{transactionId}}", "broadcast"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"6710f1f1c2a1b2c3d4e5f6a8\",\n  \"walletId\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"txid\": \"3a7f...e21c\",\n  \"type\": \"send\",\n  \"amount\": \"0.001\",\n  \"feeRate\": \"12\",\n  \"status\": \"broadcast\",\n  \"confirmations\": 0,\n  \"rawTx\": \"rawtx:...:signed\",\n  \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n  \"updatedAt\": \"2024-10-13T12:02:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Transaction By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["api", "v1", "transactions", "{{transactionId}}"]
+            },
+            "description": "Fetch a transaction by id."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}",
+                  "host": ["{{transactionServiceBaseUrl}}"],
+                  "path": ["api", "v1", "transactions", "{{transactionId}}"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"6710f1f1c2a1b2c3d4e5f6a8\",\n  \"walletId\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n  \"txid\": null,\n  \"type\": \"send\",\n  \"amount\": \"0.001\",\n  \"feeRate\": \"12\",\n  \"status\": \"pending\",\n  \"confirmations\": 0,\n  \"rawTx\": \"rawtx:...:signed\",\n  \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n  \"updatedAt\": \"2024-10-13T12:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions?page=1&limit=20&walletId={{walletId}}&status=pending",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["api", "v1", "transactions"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "walletId", "value": "{{walletId}}" },
+                { "key": "status", "value": "pending" },
+                { "key": "from", "value": "2024-10-01T00:00:00.000Z", "disabled": true },
+                { "key": "to", "value": "2024-10-31T00:00:00.000Z", "disabled": true }
+              ]
+            },
+            "description": "List transactions with filters and pagination."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions?page=1&limit=20&walletId={{walletId}}&status=pending",
+                  "host": ["{{transactionServiceBaseUrl}}"],
+                  "path": ["api", "v1", "transactions"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "walletId", "value": "{{walletId}}" },
+                    { "key": "status", "value": "pending" }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"items\": [\n    {\n      \"id\": \"6710f1f1c2a1b2c3d4e5f6a8\",\n      \"walletId\": \"6710f1f1c2a1b2c3d4e5f6a7\",\n      \"txid\": null,\n      \"type\": \"send\",\n      \"amount\": \"0.001\",\n      \"feeRate\": \"12\",\n      \"status\": \"pending\",\n      \"confirmations\": 0,\n      \"rawTx\": \"rawtx:...:signed\",\n      \"createdAt\": \"2024-10-13T12:00:00.000Z\",\n      \"updatedAt\": \"2024-10-13T12:00:00.000Z\"\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 20,\n  \"totalPages\": 1\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Transaction Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}/status",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["api", "v1", "transactions", "{{transactionId}}", "status"]
+            },
+            "description": "Fetch a transaction's confirmation status."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{transactionServiceBaseUrl}}/api/v1/transactions/{{transactionId}}/status",
+                  "host": ["{{transactionServiceBaseUrl}}"],
+                  "path": ["api", "v1", "transactions", "{{transactionId}}", "status"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"transactionId\": \"6710f1f1c2a1b2c3d4e5f6a8\",\n  \"status\": \"pending\",\n  \"confirmations\": 0\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GraphQL Gateway",
+      "item": [
+        {
+          "name": "Query: wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query Wallet($id: ID!) { wallet(id: $id) { id label address network type balanceCache metadata ownerUserId status createdAt updatedAt } }\",\n  \"variables\": { \"id\": \"{{walletId}}\" }\n}"
+            },
+            "url": {
+              "raw": "{{graphqlBaseUrl}}/graphql",
+              "host": ["{{graphqlBaseUrl}}"],
+              "path": ["graphql"]
+            },
+            "description": "Fetch a single wallet by id."
+          }
+        },
+        {
+          "name": "Query: wallets (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query Wallets($page: Int, $limit: Int, $ownerUserId: String) { wallets(page: $page, limit: $limit, ownerUserId: $ownerUserId) { items { id label network type balanceCache status } pageInfo { total page limit totalPages } } }\",\n  \"variables\": { \"page\": 1, \"limit\": 20, \"ownerUserId\": \"user-123\" }\n}"
+            },
+            "url": {
+              "raw": "{{graphqlBaseUrl}}/graphql",
+              "host": ["{{graphqlBaseUrl}}"],
+              "path": ["graphql"]
+            },
+            "description": "List wallets with pagination."
+          }
+        },
+        {
+          "name": "Mutation: createWallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateWallet($input: CreateWalletInput!) { createWallet(input: $input) { id label address network type balanceCache status createdAt updatedAt } }\",\n  \"variables\": { \"input\": { \"label\": \"My Hot Wallet\", \"network\": \"testnet\", \"type\": \"hot\", \"ownerUserId\": \"user-123\", \"metadata\": { \"purpose\": \"payroll\" } } }\n}"
+            },
+            "url": {
+              "raw": "{{graphqlBaseUrl}}/graphql",
+              "host": ["{{graphqlBaseUrl}}"],
+              "path": ["graphql"]
+            },
+            "description": "Create a new wallet via the gateway."
+          }
+        },
+        {
+          "name": "Query: transactions",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query Transactions($walletId: String, $status: String, $page: Int, $limit: Int) { transactions(walletId: $walletId, status: $status, page: $page, limit: $limit) { items { id walletId txid type amount feeRate status confirmations } pageInfo { total page limit totalPages } } }\",\n  \"variables\": { \"walletId\": \"{{walletId}}\", \"status\": \"pending\", \"page\": 1, \"limit\": 20 }\n}"
+            },
+            "url": {
+              "raw": "{{graphqlBaseUrl}}/graphql",
+              "host": ["{{graphqlBaseUrl}}"],
+              "path": ["graphql"]
+            },
+            "description": "List transactions with filters."
+          }
+        },
+        {
+          "name": "Mutation: createTransaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateTransaction($input: CreateTransactionInput!) { createTransaction(input: $input) { id walletId txid type amount feeRate status confirmations createdAt updatedAt } }\",\n  \"variables\": { \"input\": { \"walletId\": \"{{walletId}}\", \"type\": \"send\", \"amount\": \"0.001\", \"feeRate\": \"12\", \"destinationAddress\": \"tb1q...\" } }\n}"
+            },
+            "url": {
+              "raw": "{{graphqlBaseUrl}}/graphql",
+              "host": ["{{graphqlBaseUrl}}"],
+              "path": ["graphql"]
+            },
+            "description": "Create a new transaction via the gateway."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "Wallet Service - Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/healthz",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Wallet Service - Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{walletServiceBaseUrl}}/readyz",
+              "host": ["{{walletServiceBaseUrl}}"],
+              "path": ["readyz"]
+            }
+          }
+        },
+        {
+          "name": "Transaction Service - Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/healthz",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Transaction Service - Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{transactionServiceBaseUrl}}/readyz",
+              "host": ["{{transactionServiceBaseUrl}}"],
+              "path": ["readyz"]
+            }
+          }
+        },
+        {
+          "name": "GraphQL Gateway - Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{graphqlBaseUrl}}/healthz",
+              "host": ["{{graphqlBaseUrl}}"],
+              "path": ["healthz"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

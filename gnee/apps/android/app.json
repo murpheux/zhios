@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Zuma Wallet",
+    "slug": "zuma-wallet-android",
+    "scheme": "zumawallet",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "platforms": ["android"],
+    "android": {
+      "package": "com.gnee.zumawallet"
+    },
+    "extra": {
+      "zumaGatewayUrl": "http://10.0.2.2:3003/graphql"
+    }
+  }
+}

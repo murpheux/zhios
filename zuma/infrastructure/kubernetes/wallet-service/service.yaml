@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wallet-service
+  namespace: zuma
+  labels:
+    app: wallet-service
+spec:
+  type: ClusterIP
+  selector:
+    app: wallet-service
+  ports:
+    - name: http
+      port: 3001
+      targetPort: 3001

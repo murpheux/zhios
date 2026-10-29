@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transaction-service-config
+  namespace: zuma
+data:
+  NODE_ENV: "production"
+  PORT: "3002"
+  LOG_LEVEL: "info"
+  JWT_ISSUER: "zuma"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.zuma.svc.cluster.local:4318"
+  METRICS_ENABLED: "true"
+  WALLET_SERVICE_URL: "http://wallet-service.zuma.svc.cluster.local:3001"
+  BITCOIN_NETWORK: "testnet"

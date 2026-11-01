@@ -1,5 +1,6 @@
 const mockGetSigningKey = jest.fn();
-const mockJwksClient = jest.fn(() => ({ getSigningKey: mockGetSigningKey }));
+const mockGetSigningKeys = jest.fn().mockResolvedValue([]);
+const mockJwksClient = jest.fn(() => ({ getSigningKey: mockGetSigningKey, getSigningKeys: mockGetSigningKeys }));
 jest.mock('jwks-rsa', () => mockJwksClient);
 
 import fastify, { type FastifyInstance } from 'fastify';
@@ -52,7 +53,7 @@ describe('authPlugin (JWKS / OIDC)', () => {
     app.inject({ method: 'GET', url: '/me', headers: { authorization: `Bearer ${token}` } });
 
   it('creates a caching, rate-limited JWKS client for the configured URI', () => {
-    expect(mockJwksClient).toHaveBeenCalledWith({ jwksUri: JWKS_URI, cache: true, rateLimit: true });
+    expect(mockJwksClient).toHaveBeenCalledWith({ jwksUri: JWKS_URI, cache: true, rateLimit: true, timeout: 5000 });
   });
 
   it('verifies an RS256 token using the key resolved by kid', async () => {
@@ -106,6 +107,57 @@ describe('authPlugin (JWKS algorithm allow-list)', () => {
       headers: { authorization: `Bearer ${signRs256(claims(), privateKey, { alg: 'RS256', kid: 'k' })}` },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('authPlugin JWKS warm-up', () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const warn = jest.fn();
+  const info = jest.fn();
+
+  const buildWithLog = async () => {
+    const app = fastify();
+    // Capture what the plugin logs, without depending on pino transport details.
+    jest.spyOn(app.log, 'warn').mockImplementation(warn as never);
+    jest.spyOn(app.log, 'info').mockImplementation(info as never);
+    await app.register(authPlugin, { jwtSecret: 'x'.repeat(32), jwtIssuer: ISSUER, jwksUri: JWKS_URI, jwtAudience: AUDIENCE });
+    return app;
+  };
+
+  beforeEach(() => {
+    mockGetSigningKeys.mockReset();
+    warn.mockReset();
+    info.mockReset();
+  });
+
+  it('prefetches the signing keys once the app is ready, with a bounded fetch timeout', async () => {
+    mockGetSigningKeys.mockResolvedValue([{ kid: 'k1' }, { kid: 'k2' }]);
+    const app = await buildWithLog();
+    expect(mockGetSigningKeys).not.toHaveBeenCalled();
+    await app.ready();
+    await flush();
+    expect(mockGetSigningKeys).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith({ jwksKeys: 2 }, 'jwks cache warmed');
+    expect(mockJwksClient).toHaveBeenLastCalledWith(expect.objectContaining({ jwksUri: JWKS_URI, cache: true, timeout: 5000 }));
+    await app.close();
+  });
+
+  it('a failed warm-up is logged and non-fatal: the app still starts and serves', async () => {
+    mockGetSigningKeys.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    const app = await buildWithLog();
+    app.get('/ping', async () => 'pong');
+    await app.ready();
+    await flush();
+    expect(warn).toHaveBeenCalledWith({ jwksError: 'connect ECONNREFUSED' }, 'jwks warm-up failed; keys will be fetched on demand');
+    expect((await app.inject({ method: 'GET', url: '/ping' })).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('never blocks startup on a slow IdP', async () => {
+    mockGetSigningKeys.mockReturnValue(new Promise(() => {}));
+    const app = await buildWithLog();
+    await expect(app.ready()).resolves.toBeDefined();
     await app.close();
   });
 });

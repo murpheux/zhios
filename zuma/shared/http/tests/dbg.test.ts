@@ -1,7 +1,7 @@
 // Regression: the JWKS secret callback must receive the decoded token header (kid). Before the fix the
 // plugin registered @fastify/jwt without `decode.complete`, so every OIDC token was rejected.
 const mockGetSigningKey = jest.fn();
-jest.mock('jwks-rsa', () => jest.fn(() => ({ getSigningKey: mockGetSigningKey })));
+jest.mock('jwks-rsa', () => jest.fn(() => ({ getSigningKey: mockGetSigningKey, getSigningKeys: jest.fn().mockResolvedValue([]) })));
 
 import fastify from 'fastify';
 import { authPlugin } from '../src';

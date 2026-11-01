@@ -32,6 +32,11 @@ services:
 
   wallet-service:
     image: ${IMAGE_PREFIX:-zhios}/wallet-service:${IMAGE_TAG:-local}
+    # Start after the dev IdP is healthy so the services' background JWKS warm-up succeeds and the
+    # first authenticated request doesn't pay for a cold key fetch.
+    depends_on:
+      mock-oidc:
+        condition: service_healthy
     env_file: !reset []
     networks:
       - zuma-net
@@ -41,6 +46,11 @@ services:
 
   transaction-service:
     image: ${IMAGE_PREFIX:-zhios}/transaction-service:${IMAGE_TAG:-local}
+    # Start after the dev IdP is healthy so the services' background JWKS warm-up succeeds and the
+    # first authenticated request doesn't pay for a cold key fetch.
+    depends_on:
+      mock-oidc:
+        condition: service_healthy
     env_file: !reset []
     networks:
       - zuma-net

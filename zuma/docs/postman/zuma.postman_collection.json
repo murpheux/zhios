@@ -83,7 +83,7 @@
           "    const cachedExp = parseInt(cv.get(name + 'Exp') || '0', 10);",
           "    if (cv.get(name + 'Mode') === 'oidc' && cachedExp - 30 > now) return; // cached (or known-unavailable)",
           "    const header = [{ key: 'Content-Type', value: 'application/x-www-form-urlencoded' }];",
-          "    // The mock IdP derives iss from the Host it is reached on; it must equal the services' JWT_ISSUER.",
+          "    // Only needed for IdPs that derive iss from the Host header; the zhios dev IdP pins it via $ISSUER.",
           "    if (v('oidcHostHeader')) header.push({ key: 'Host', value: v('oidcHostHeader') });",
           "    pm.sendRequest({",
           "      url: tokenUrl,",
@@ -2193,7 +2193,13 @@
           ],
           "request": {
             "method": "PATCH",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
             "url": {
               "raw": "{{walletUrl}}/api/v1/wallets/{{walletId}}/metadata",
               "host": [
@@ -2217,6 +2223,15 @@
                   "type": "string"
                 }
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"auditor-write-attempt\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []

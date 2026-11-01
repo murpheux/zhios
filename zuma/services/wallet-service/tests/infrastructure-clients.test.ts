@@ -1,3 +1,4 @@
+import { UpstreamError, mapErrorToHttp } from '@zuma/shared-common';
 import { MockAddressGenerator } from '../src/infrastructure/clients/mock-address-generator';
 import { TransactionHistoryHttpClient } from '../src/infrastructure/clients/transaction-history.client';
 import type { WalletNetwork } from '../src/domain/value-objects/network';
@@ -75,13 +76,46 @@ describe('TransactionHistoryHttpClient', () => {
     expect((fetchMock.mock.calls[0] as [string, RequestInit])[1].headers).toBeUndefined();
   });
 
-  it.each([401, 404, 500, 503])('throws on upstream %d', async (status) => {
-    fetchMock.mockResolvedValue(new Response('{}', { status }));
-    await expect(client.getHistoryForWallet('w1')).rejects.toThrow(`transaction-service responded with ${status}`);
+  const rejection = async (call: Promise<unknown>) => {
+    const error = await call.then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(UpstreamError);
+    return error as UpstreamError;
+  };
+
+  it.each([401, 404, 500, 503])('upstream %d -> 502 UPSTREAM_ERROR (never an opaque 500)', async (status) => {
+    fetchMock.mockResolvedValue(new Response('{"message":"internal detail"}', { status }));
+    const error = await rejection(client.getHistoryForWallet('w1'));
+    expect(error).toMatchObject({ httpStatus: 502, code: 'UPSTREAM_ERROR', upstream: 'transaction-service' });
+    expect(mapErrorToHttp(error).message).not.toContain('internal detail');
   });
 
-  it('propagates network/timeout failures', async () => {
-    fetchMock.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
-    await expect(client.getHistoryForWallet('w1')).rejects.toThrow('aborted');
+  it.each([
+    ['TimeoutError', 504, 'UPSTREAM_TIMEOUT'],
+    ['AbortError', 504, 'UPSTREAM_TIMEOUT'],
+    ['TypeError', 503, 'UPSTREAM_UNAVAILABLE'],
+  ] as const)('fetch rejecting with %s -> %i %s', async (name, httpStatus, code) => {
+    fetchMock.mockRejectedValue(Object.assign(new Error('fetch failed'), { name }));
+    expect(await rejection(client.getHistoryForWallet('w1'))).toMatchObject({ httpStatus, code });
+  });
+
+  it.each([
+    ['non-JSON body', 'not json'],
+    ['missing items', '{"total":0}'],
+    ['items not an array', '{"items":{}}'],
+  ])('%s -> 502 UPSTREAM_ERROR', async (_label, body) => {
+    fetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+    expect(await rejection(client.getHistoryForWallet('w1'))).toMatchObject({ httpStatus: 502, code: 'UPSTREAM_ERROR' });
+  });
+
+  it('uses the configured timeout, defaulting to 5s (a cold JWKS fetch upstream took ~2.2s)', async () => {
+    const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
+    fetchMock.mockImplementation(async () => ok({ items: [] }));
+    await client.getHistoryForWallet('w1');
+    await new TransactionHistoryHttpClient({ baseUrl: 'http://tx:3002', timeoutMs: 750 }).getHistoryForWallet('w1');
+    expect(timeoutSpy.mock.calls.map(([ms]) => ms)).toEqual([5000, 750]);
+    timeoutSpy.mockRestore();
   });
 });

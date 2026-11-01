@@ -449,7 +449,7 @@ resource "docker_container" "transaction_service" {
     }
   }
 
-  depends_on = [docker_container.mongo, docker_container.wallet_service]
+  depends_on = [docker_container.mongo, docker_container.mock_oidc, docker_container.wallet_service]
 }
 
 resource "docker_container" "graphql_gateway" {

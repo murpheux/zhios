@@ -750,6 +750,9 @@ pm.test('only wallets owned by the caller', function () {
       method: 'PATCH',
       url: `${W}/api/v1/wallets/{{walletId}}/metadata`,
       auth: 'auditor',
+      // A valid body is required: without one Fastify's schema check answers 400 before the
+      // use-case gets to the ownership/role check this request is about.
+      body: { label: 'auditor-write-attempt' },
       description: 'Privileged readers get an explicit 403 on writes (they can already see the wallet).',
       tests: S.error(403, 'FORBIDDEN'),
     }),

@@ -56,6 +56,7 @@ No secret values are stored in Terraform state: only ARNs and parameter names ar
 | `TRUST_PROXY` | config | all | `false` in compose; `true` in k8s (ingress) and Lambda (API Gateway) |
 | `HTTP_BODY_LIMIT_BYTES`, `HTTP_CONNECTION_TIMEOUT_MS`, `HTTP_REQUEST_TIMEOUT_MS`, `SHUTDOWN_TIMEOUT_MS` | config | all | defaults `65536`, `10000`, `30000`, `10000` |
 | `DOCS_ENABLED` | config | all | `true` in compose, `false` in k8s/Lambda |
+| `TRANSACTION_SERVICE_TIMEOUT_MS` | config | wallet-service | default `5000`; budget for the history call into transaction-service. Failures map to 504 `UPSTREAM_TIMEOUT`, 503 `UPSTREAM_UNAVAILABLE` or 502 `UPSTREAM_ERROR`, never an opaque 500 |
 | `UPSTREAM_TIMEOUT_MS`, `GRAPHQL_QUERY_DEPTH`, `GRAPHQL_INTROSPECTION_ENABLED` | config | gateway | `5000`, `8`; introspection `true` in compose, `false` in k8s |
 | `INTERNAL_JWT_SECRET_ARN` | config | wallet Lambda | Secrets Manager ARN resolved at cold start (like `JWT_SECRET_ARN`) |
 

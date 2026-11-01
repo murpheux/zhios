@@ -1,4 +1,5 @@
 import { DomainError } from './domain-error';
+import { UPSTREAM_MESSAGES, UpstreamError } from './upstream-error';
 
 export interface HttpErrorBody {
   statusCode: number;
@@ -35,6 +36,9 @@ const clientErrorStatus = (error: unknown): number | undefined => {
 // Maps a thrown error to a serializable HTTP error body. Never leaks stack traces or the
 // message of non-domain errors for 5xx.
 export const mapErrorToHttp = (error: unknown): HttpErrorBody => {
+  if (error instanceof UpstreamError) {
+    return { statusCode: error.httpStatus, code: error.code, message: UPSTREAM_MESSAGES[error.code] };
+  }
   if (error instanceof DomainError) {
     if (error.httpStatus >= 500) {
       return { ...INTERNAL_ERROR_BODY, statusCode: error.httpStatus };

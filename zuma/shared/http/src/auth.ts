@@ -68,8 +68,9 @@ const authPluginImpl: FastifyPluginAsync<AuthPluginOptions> = async (
     if (!opts.jwtAudience) {
       throw new Error('authPlugin: jwtAudience is required when jwksUri is set');
     }
+    const jwks = jwksClient({ jwksUri: opts.jwksUri, cache: true, rateLimit: true, timeout: JWKS_FETCH_TIMEOUT_MS });
     await app.register(fastifyJwt, {
-      secret: buildJwksSecret(opts.jwksUri),
+      secret: jwksSecret(jwks),
       // The secret callback needs the token header (kid); without `complete` it only gets the payload.
       decode: { complete: true },
       verify: {
@@ -79,6 +80,17 @@ const authPluginImpl: FastifyPluginAsync<AuthPluginOptions> = async (
         // allowedIss/allowedAud are only enforced when the claim is present, so require both.
         requiredClaims: ['sub', 'exp', 'iss', 'aud'],
       },
+    });
+    // Warm the JWKS cache in the background once the app is ready, so the first authenticated
+    // request after a (re)start doesn't pay for the key fetch. Measured ~2.2s cold, which tripped
+    // wallet-service's call into transaction-service. Never blocks startup; failure is non-fatal
+    // because keys are still fetched on demand.
+    app.addHook('onReady', async () => {
+      void jwks.getSigningKeys().then(
+        (keys) => app.log.info({ jwksKeys: keys.length }, 'jwks cache warmed'),
+        (error: unknown) =>
+          app.log.warn({ jwksError: (error as { message?: string }).message }, 'jwks warm-up failed; keys will be fetched on demand'),
+      );
     });
   } else {
     await app.register(fastifyJwt, {
@@ -116,10 +128,11 @@ const authPluginImpl: FastifyPluginAsync<AuthPluginOptions> = async (
   });
 };
 
+const JWKS_FETCH_TIMEOUT_MS = 5000;
+
 // Resolves the public key for a token by `kid`, fetched (and cached) from the OIDC provider's
 // JWKS endpoint — the standard @fastify/jwt escape hatch for provider-rotated keys.
-function buildJwksSecret(jwksUri: string) {
-  const client = jwksClient({ jwksUri, cache: true, rateLimit: true });
+function jwksSecret(client: jwksClient.JwksClient) {
   return async (_request: FastifyRequest, tokenOrHeader: TokenOrHeader): Promise<string> => {
     const { kid } = headerOf(tokenOrHeader);
     if (!kid) {

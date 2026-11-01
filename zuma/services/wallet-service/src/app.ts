@@ -35,6 +35,7 @@ export const buildApp = async ({ config, logger }: BuildAppOptions) => {
   const addressGenerator = new MockAddressGenerator();
   const transactionHistoryClient = new TransactionHistoryHttpClient({
     baseUrl: config.TRANSACTION_SERVICE_URL,
+    timeoutMs: config.TRANSACTION_SERVICE_TIMEOUT_MS,
   });
 
   // Metrics, helmet/CORS/rate-limit, user + service auth (requireAuth/requireService), probes,

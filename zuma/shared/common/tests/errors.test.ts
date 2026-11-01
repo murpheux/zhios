@@ -4,6 +4,8 @@ import {
   ForbiddenError,
   NotFoundError,
   UnauthorizedError,
+  UPSTREAM_MESSAGES,
+  UpstreamError,
   ValidationError,
   mapErrorToHttp,
 } from '../src';
@@ -93,5 +95,24 @@ describe('mapErrorToHttp', () => {
     const first = mapErrorToHttp(new Error('a'));
     first.message = 'mutated';
     expect(mapErrorToHttp(new Error('b')).message).toBe('An unexpected error occurred');
+  });
+});
+
+describe('UpstreamError', () => {
+  it.each([
+    ['UPSTREAM_ERROR', 502],
+    ['UPSTREAM_UNAVAILABLE', 503],
+    ['UPSTREAM_TIMEOUT', 504],
+  ] as const)('%s maps to %i with a fixed, client-safe message', (code, status) => {
+    const cause = new Error('connect ECONNREFUSED 10.0.0.7:3002 — internal detail');
+    const error = new UpstreamError('transaction-service', code, cause);
+    expect(error.httpStatus).toBe(status);
+    expect(error.upstream).toBe('transaction-service');
+    expect(error.cause).toBe(cause);
+    expect(error).toBeInstanceOf(DomainError);
+    const body = mapErrorToHttp(error);
+    expect(body).toEqual({ statusCode: status, code, message: UPSTREAM_MESSAGES[code] });
+    expect(JSON.stringify(body)).not.toContain('ECONNREFUSED');
+    expect(JSON.stringify(body)).not.toContain('transaction-service');
   });
 });

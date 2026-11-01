@@ -7,7 +7,7 @@
   "forwardPorts": [5173],
   "customizations": {
     "vscode": {
-      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "ms-playwright.playwright"]
+      "extensions": ["biomejs.biome", "ms-playwright.playwright"]
     }
   },
   "remoteEnv": {

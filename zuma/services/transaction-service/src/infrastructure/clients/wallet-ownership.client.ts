@@ -1,3 +1,5 @@
+// DEPRECATED / UNUSED: inferred ownership from the user-facing GET /wallets/:id, which privileged roles can
+// read. Replaced by WalletServiceHttpClient (explicit check over /internal). Safe to delete.
 import type { WalletOwnershipPort } from '../../application/ports/wallet-ownership.port';
 
 export interface WalletServiceClientOptions {

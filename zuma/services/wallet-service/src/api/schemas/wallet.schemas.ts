@@ -1,4 +1,6 @@
 // Fastify JSON schemas for wallet routes; doubles as the OpenAPI source for @fastify/swagger.
+import { OBJECT_ID_PATTERN, SATS_AMOUNT_PATTERN, SATS_BALANCE_PATTERN } from '@zuma/shared-common';
+
 const networkEnum = ['mainnet', 'testnet', 'regtest'];
 const walletKindEnum = ['hot', 'cold', 'custodial', 'non-custodial'];
 const walletStatusEnum = ['active', 'suspended', 'archived'];
@@ -22,7 +24,7 @@ export const walletResponseSchema = {
     address: { type: 'string' },
     network: { type: 'string', enum: networkEnum },
     type: { type: 'string', enum: walletKindEnum },
-    balanceCache: { type: 'string' },
+    balanceCache: { type: 'string', pattern: SATS_BALANCE_PATTERN, description: 'Balance in satoshis' },
     metadata: { type: 'object', additionalProperties: true },
     ownerUserId: { type: 'string' },
     status: { type: 'string', enum: walletStatusEnum },
@@ -67,7 +69,7 @@ export const createWalletSchema = {
 
 export const walletParamsSchema = {
   type: 'object',
-  properties: { id: { type: 'string', minLength: 1 } },
+  properties: { id: { type: 'string', pattern: OBJECT_ID_PATTERN } },
   required: ['id'],
 } as const;
 
@@ -140,12 +142,13 @@ export const updateMetadataSchema = {
   },
   response: {
     200: walletResponseSchema,
+    403: errorResponseSchema,
     404: errorResponseSchema,
   },
 } as const;
 
 export const getBalanceSchema = {
-  description: "Fetch a wallet's cached balance",
+  description: "Fetch a wallet's stored balance (satoshis, decimal string)",
   tags: ['wallets'],
   security: [{ bearerAuth: [] }],
   params: walletParamsSchema,
@@ -154,7 +157,7 @@ export const getBalanceSchema = {
       type: 'object',
       properties: {
         walletId: { type: 'string' },
-        balanceCache: { type: 'string' },
+        balanceCache: { type: 'string', pattern: SATS_BALANCE_PATTERN },
       },
       required: ['walletId', 'balanceCache'],
     },
@@ -181,7 +184,7 @@ export const getTransactionHistorySchema = {
           feeRate: { type: 'string' },
           status: {
             type: 'string',
-            enum: ['pending', 'signed', 'broadcast', 'confirmed', 'failed', 'rejected'],
+            enum: ['pending', 'broadcasting', 'broadcast', 'confirmed', 'failed'],
           },
           confirmations: { type: 'number' },
           rawTx: { type: ['string', 'null'] },
@@ -191,5 +194,102 @@ export const getTransactionHistorySchema = {
       },
     },
     404: errorResponseSchema,
+  },
+} as const;
+
+const balanceResultSchema = {
+  type: 'object',
+  properties: {
+    walletId: { type: 'string' },
+    balanceCache: { type: 'string', pattern: SATS_BALANCE_PATTERN },
+  },
+  required: ['walletId', 'balanceCache'],
+} as const;
+
+export const depositSchema = {
+  description:
+    'Admin-only dev/test funding: credit a wallet (ledger reason `deposit`). Idempotent by `reference`.',
+  tags: ['admin'],
+  security: [{ bearerAuth: [] }],
+  params: walletParamsSchema,
+  body: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      amountSats: { type: 'string', pattern: SATS_AMOUNT_PATTERN },
+      reference: { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9:._-]+$' },
+    },
+    required: ['amountSats', 'reference'],
+    examples: [{ amountSats: '100000', reference: 'faucet-2026-10-31-001' }],
+  },
+  response: {
+    200: balanceResultSchema,
+    400: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+  },
+} as const;
+
+// --- Internal (service-to-service, x-service-token) ---
+
+export const internalWalletSchema = {
+  description: 'Service-only wallet summary used by transaction-service for explicit ownership/status checks',
+  tags: ['internal'],
+  params: walletParamsSchema,
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        ownerUserId: { type: 'string' },
+        status: { type: 'string', enum: walletStatusEnum },
+        network: { type: 'string', enum: networkEnum },
+        address: { type: 'string' },
+      },
+      required: ['id', 'ownerUserId', 'status', 'network', 'address'],
+    },
+    404: errorResponseSchema,
+  },
+} as const;
+
+const movementBody = {
+  transactionId: { type: 'string', pattern: OBJECT_ID_PATTERN },
+  amountSats: { type: 'string', pattern: SATS_AMOUNT_PATTERN },
+} as const;
+
+export const internalDebitSchema = {
+  description: 'Service-only guarded debit for a send. Idempotent by transactionId.',
+  tags: ['internal'],
+  params: walletParamsSchema,
+  body: {
+    type: 'object',
+    additionalProperties: false,
+    properties: movementBody,
+    required: ['transactionId', 'amountSats'],
+  },
+  response: {
+    200: balanceResultSchema,
+    400: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+  },
+} as const;
+
+export const internalCreditSchema = {
+  description: 'Service-only refund credit for a failed send. Idempotent by transactionId.',
+  tags: ['internal'],
+  params: walletParamsSchema,
+  body: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { ...movementBody, reason: { type: 'string', enum: ['refund'] } },
+    required: ['transactionId', 'amountSats', 'reason'],
+  },
+  response: {
+    200: balanceResultSchema,
+    400: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
   },
 } as const;

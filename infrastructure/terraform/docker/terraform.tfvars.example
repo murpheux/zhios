@@ -1,0 +1,26 @@
+# Copy to terraform.tfvars (git-ignored) only if you need non-default values.
+# NEVER put secrets here — mongo_root_password, jwt_secret, internal_jwt_secret and
+# metrics_token come from TF_VAR_* via `op run` or scripts/terraform-run.sh.
+
+# Docker Desktop on macOS (scripts/terraform-run.sh auto-detects this from the docker context):
+# docker_host = "unix:///Users/<you>/.docker/run/docker.sock"
+# Swarm manager over SSH (plain containers on that node; ports bound to its loopback):
+# docker_host = "ssh://_ai_daemon@scarlet"
+
+# name_prefix  = "zhios"
+# image_prefix = "zhios"
+# image_tag    = "local"
+
+# Set false to reuse images from `make build-images` (docker compose build, same tags):
+# build_images   = true
+# buildx_builder = "default"
+
+# bind_address     = "127.0.0.1"
+# web_port         = 8080
+# gateway_port     = 3003
+# wallet_port      = 3001
+# transaction_port = 3002
+# idp_port         = 8090
+
+# mongo_image     = "mongo:7.0.14"
+# log_level       = "info"

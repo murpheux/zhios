@@ -1,0 +1,15 @@
+{
+  "tokenExpirySeconds": 3600,
+  "clientCredentials": {
+    "audience": ["zuma-api"],
+    "scopes": {
+      "zuma-admin": { "sub": "postman-admin", "roles": ["admin"] },
+      "zuma-user": { "sub": "postman-user", "roles": ["user"] },
+      "zuma-user-2": { "sub": "postman-user-2", "roles": ["user"] },
+      "zuma-auditor": { "sub": "postman-auditor", "roles": ["auditor"] }
+    }
+  },
+  "interactive": {
+    "audience": ["zuma-api"]
+  }
+}

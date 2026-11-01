@@ -1,0 +1,29 @@
+# HTTPS is mandatory: OIDC Authorization Code + PKCE needs a secure context (crypto.subtle), and
+# HSTS in the nginx config only takes effect over TLS. Certificate issued by cert-manager.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-spa
+  namespace: gnee
+  annotations:
+    # Placeholder — set to your ClusterIssuer (cert-manager must be installed in the cluster)
+    cert-manager.io/cluster-issuer: "CHANGE_ME-letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - wallet.example.com
+      secretName: web-spa-tls
+  rules:
+    - host: wallet.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-spa
+                port:
+                  name: http

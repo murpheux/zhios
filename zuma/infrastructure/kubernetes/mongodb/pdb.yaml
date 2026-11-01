@@ -1,0 +1,12 @@
+# Single replica: maxUnavailable 0 blocks voluntary evictions (node drains) until an operator
+# intervenes — intentional, a drain would otherwise take the only Mongo pod down.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mongodb
+  namespace: zuma
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: mongodb

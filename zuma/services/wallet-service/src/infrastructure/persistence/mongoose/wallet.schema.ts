@@ -7,7 +7,9 @@ export interface WalletDocumentShape {
   address: string;
   network: WalletNetwork;
   type: WalletKind;
-  balanceCache: string;
+  balanceSats: number;
+  /** Ledger entry ids whose $inc has been applied but not yet acknowledged (two-phase movement marker). */
+  pendingLedgerIds: string[];
   metadata: Record<string, unknown>;
   ownerUserId: string;
   status: WalletLifecycleStatus;
@@ -21,7 +23,15 @@ export const walletSchema = new Schema<WalletDocumentShape>(
     address: { type: String, required: true, unique: true, index: true },
     network: { type: String, enum: ['mainnet', 'testnet', 'regtest'], required: true },
     type: { type: String, enum: ['hot', 'cold', 'custodial', 'non-custodial'], required: true },
-    balanceCache: { type: String, required: true, default: '0' },
+    // Integer satoshis. Only mutated through guarded $inc in MongooseWalletRepository.applyBalanceMovement.
+    balanceSats: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      validate: { validator: Number.isSafeInteger, message: 'balanceSats must be a safe integer' },
+    },
+    pendingLedgerIds: { type: [String], default: [] },
     metadata: { type: Schema.Types.Mixed, default: {} },
     ownerUserId: { type: String, required: true, index: true },
     status: { type: String, enum: ['active', 'suspended', 'archived'], default: 'active' },

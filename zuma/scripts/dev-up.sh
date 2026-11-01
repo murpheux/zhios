@@ -6,6 +6,14 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# docker-compose.yml reads every secret (MONGO_ROOT_PASSWORD, JWT_SECRET, INTERNAL_JWT_SECRET,
+# METRICS_TOKEN) from zuma/.env — there are no inline fallbacks, so fail early with a hint.
+if [[ ! -f .env ]]; then
+  echo "error: zuma/.env not found — copy .env.example to .env and fill in the required keys" >&2
+  echo "       (see the header of docker-compose.yml for the list)." >&2
+  exit 1
+fi
+
 if [[ "${1:-}" == "--full" ]]; then
   echo "Starting full docker-compose stack (mongo, wallet-service, transaction-service, graphql-gateway)..."
   docker compose up -d --build
@@ -18,7 +26,9 @@ docker compose up -d mongo
 
 cat <<'EOF'
 
-MongoDB is up on localhost:27017.
+MongoDB is up on localhost:27017 (auth enabled, single node, no replica set).
+Point each service's MONGODB_URI at it with the root credentials from zuma/.env, e.g.
+  mongodb://<user>:<password>@localhost:27017/zuma-wallet?authSource=admin
 
 Run each service in its own terminal:
   npm run dev -w @zuma/wallet-service

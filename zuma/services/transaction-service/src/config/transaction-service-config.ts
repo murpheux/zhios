@@ -1,17 +1,21 @@
 import { z } from 'zod';
-import { baseEnvSchema, loadConfig, type BaseEnv } from '@zuma/shared-config';
+import { baseEnvSchema, loadConfig, refineBaseEnv, type BaseEnv } from '@zuma/shared-config';
 
 export type TransactionServiceConfig = BaseEnv & {
+  SERVICE_NAME: string;
   WALLET_SERVICE_URL: string;
   BITCOIN_NETWORK: 'mainnet' | 'testnet' | 'regtest';
   BITCOIN_ADAPTER: 'mock' | 'rpc';
 };
 
-const transactionServiceEnvSchema = baseEnvSchema.extend({
-  WALLET_SERVICE_URL: z.string().default('http://localhost:3001'),
-  BITCOIN_NETWORK: z.enum(['mainnet', 'testnet', 'regtest']).default('testnet'),
-  BITCOIN_ADAPTER: z.enum(['mock', 'rpc']).default('mock'),
-});
+const transactionServiceEnvSchema = baseEnvSchema
+  .extend({
+    SERVICE_NAME: z.string().min(1).default('transaction-service'),
+    WALLET_SERVICE_URL: z.string().default('http://localhost:3001'),
+    BITCOIN_NETWORK: z.enum(['mainnet', 'testnet', 'regtest']).default('testnet'),
+    BITCOIN_ADAPTER: z.enum(['mock', 'rpc']).default('mock'),
+  })
+  .superRefine(refineBaseEnv);
 
 export const loadTransactionServiceConfig = (
   env: NodeJS.ProcessEnv = process.env,

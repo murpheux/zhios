@@ -7,8 +7,14 @@ import type { ListWalletsUseCase } from '../../application/use-cases/list-wallet
 import type { GetWalletBalanceUseCase } from '../../application/use-cases/get-wallet-balance.use-case';
 import type { GetWalletTransactionHistoryUseCase } from '../../application/use-cases/get-wallet-transaction-history.use-case';
 import type { UpdateWalletMetadataUseCase } from '../../application/use-cases/update-wallet-metadata.use-case';
+import type {
+  DepositToWalletInput,
+  DepositToWalletUseCase,
+} from '../../application/use-cases/deposit-to-wallet.use-case';
+import { toWalletResponse } from './wallet.presenter';
 import {
   createWalletSchema,
+  depositSchema,
   getBalanceSchema,
   getTransactionHistorySchema,
   getWalletSchema,
@@ -23,6 +29,7 @@ export interface WalletRoutesOptions {
   getWalletBalanceUseCase: GetWalletBalanceUseCase;
   getWalletTransactionHistoryUseCase: GetWalletTransactionHistoryUseCase;
   updateWalletMetadataUseCase: UpdateWalletMetadataUseCase;
+  depositToWalletUseCase: DepositToWalletUseCase;
 }
 
 interface WalletIdParams {
@@ -40,7 +47,8 @@ export const walletRoutes: FastifyPluginAsync<WalletRoutesOptions> = async (
   app: FastifyInstance,
   opts: WalletRoutesOptions,
 ) => {
-  app.addHook('preHandler', app.requireAuth);
+  // onRequest (not preHandler) so unauthenticated calls get 401 before body parsing/schema validation.
+  app.addHook('onRequest', app.requireAuth);
 
   app.post<{ Body: CreateWalletDto }>(
     '/wallets',
@@ -48,14 +56,15 @@ export const walletRoutes: FastifyPluginAsync<WalletRoutesOptions> = async (
     async (request, reply) => {
       const wallet = await opts.createWalletUseCase.execute(request.body, toActor(request.user));
       reply.status(201);
-      return wallet;
+      return toWalletResponse(wallet);
     },
   );
 
   app.get<{ Params: WalletIdParams }>(
     '/wallets/:id',
     { schema: getWalletSchema },
-    async (request) => opts.getWalletUseCase.execute(request.params.id, toActor(request.user)),
+    async (request) =>
+      toWalletResponse(await opts.getWalletUseCase.execute(request.params.id, toActor(request.user))),
   );
 
   app.get<{ Querystring: ListWalletsQuery }>(
@@ -63,7 +72,12 @@ export const walletRoutes: FastifyPluginAsync<WalletRoutesOptions> = async (
     { schema: listWalletsSchema },
     async (request) => {
       const { page = 1, limit = 20, ownerUserId } = request.query;
-      return opts.listWalletsUseCase.execute({ ownerUserId }, { page, limit }, toActor(request.user));
+      const result = await opts.listWalletsUseCase.execute(
+        { ownerUserId },
+        { page, limit },
+        toActor(request.user),
+      );
+      return { ...result, items: result.items.map(toWalletResponse) };
     },
   );
 
@@ -71,7 +85,9 @@ export const walletRoutes: FastifyPluginAsync<WalletRoutesOptions> = async (
     '/wallets/:id/metadata',
     { schema: updateMetadataSchema },
     async (request) =>
-      opts.updateWalletMetadataUseCase.execute(request.params.id, request.body, toActor(request.user)),
+      toWalletResponse(
+        await opts.updateWalletMetadataUseCase.execute(request.params.id, request.body, toActor(request.user)),
+      ),
   );
 
   app.get<{ Params: WalletIdParams }>(
@@ -89,5 +105,13 @@ export const walletRoutes: FastifyPluginAsync<WalletRoutesOptions> = async (
         toActor(request.user),
         request.headers.authorization,
       ),
+  );
+
+  // Admin-only dev/test funding (no chain observer yet). Role enforced here and again in the use-case.
+  app.post<{ Params: WalletIdParams; Body: DepositToWalletInput }>(
+    '/admin/wallets/:id/deposits',
+    { schema: depositSchema, onRequest: app.requireRole('admin') },
+    async (request) =>
+      opts.depositToWalletUseCase.execute(request.params.id, request.body, toActor(request.user)),
   );
 };

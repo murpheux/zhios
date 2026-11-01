@@ -15,7 +15,6 @@ const TRANSACTION_FIELDS = /* GraphQL */ `
   feeRate
   status
   confirmations
-  rawTx
   createdAt
   updatedAt
 `;
@@ -29,7 +28,7 @@ const GET_TRANSACTION = /* GraphQL */ `
 const LIST_TRANSACTIONS = /* GraphQL */ `
   query Transactions(
     $walletId: String
-    $status: String
+    $status: TransactionStatus
     $from: String
     $to: String
     $page: Int

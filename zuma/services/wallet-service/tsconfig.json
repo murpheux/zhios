@@ -4,11 +4,24 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "references": [
-    { "path": "../../shared/common" },
-    { "path": "../../shared/config" },
-    { "path": "../../shared/logging" },
-    { "path": "../../shared/observability" }
+    {
+      "path": "../../shared/common"
+    },
+    {
+      "path": "../../shared/config"
+    },
+    {
+      "path": "../../shared/logging"
+    },
+    {
+      "path": "../../shared/observability"
+    },
+    {
+      "path": "../../shared/http"
+    }
   ]
 }

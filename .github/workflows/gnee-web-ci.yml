@@ -1,43 +1,72 @@
 name: gnee-web-ci
 
+# TODO: pin actions to full commit SHAs (e.g. via pinact / dependabot).
+# actions/checkout and actions/setup-node are already SHA-pinned; every other `uses:` and the
+# container images run below (hadolint, kubeconform) are pinned to version tags only.
+
 on:
   push:
     branches: [main]
     paths:
       - "gnee/apps/web/**"
-      - "gnee/packages/**"
+      - "gnee/packages/api-client/**"
       - "gnee/package.json"
+      - "gnee/package-lock.json"
+      - "gnee/biome.json"
+      - "gnee/.dockerignore"
+      - "gnee/infrastructure/**"
+      - "gnee/scripts/**"
+      - ".github/workflows/gnee-web-ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "gnee/apps/web/**"
-      - "gnee/packages/**"
+      - "gnee/packages/api-client/**"
       - "gnee/package.json"
+      - "gnee/package-lock.json"
+      - "gnee/biome.json"
+      - "gnee/.dockerignore"
+      - "gnee/infrastructure/**"
+      - "gnee/scripts/**"
+      - ".github/workflows/gnee-web-ci.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 defaults:
   run:
     working-directory: gnee
+
+env:
+  HADOLINT_IMAGE: hadolint/hadolint:v2.12.0
+  KUBECONFORM_IMAGE: ghcr.io/yannh/kubeconform:v0.6.7
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: gnee/package-lock.json
       - run: npm ci
-      - run: npm run lint -w @gnee/web-spa
+      - run: npm run lint -w @gnee/web-spa # biome lint .
 
   typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -50,6 +79,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -63,6 +94,8 @@ jobs:
     needs: [lint, typecheck, test]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -76,6 +109,8 @@ jobs:
     needs: [build]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -87,20 +122,105 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run e2e tests
         working-directory: gnee/apps/web/spa
-        run: npm run e2e
-      # NOTE: pin to a verified commit SHA before merging — tag used here pending SHA verification.
+        # CLI --reporter overrides playwright.config.ts so CI always emits an HTML report as well
+        # as GitHub annotations; *_OPEN=never stops the HTML reporter serving/blocking on failure.
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+          PW_TEST_HTML_REPORT_OPEN: never
+        run: npm run e2e -- --reporter=github,html
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: gnee/apps/web/spa/playwright-report/
           retention-days: 14
 
-  security:
+  secret-scan:
     runs-on: ubuntu-latest
-    needs: lint
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Organisation-owned repos additionally need a GITLEAKS_LICENSE secret.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  infra-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: shellcheck scripts
+        run: shellcheck --version && shellcheck -x scripts/*.sh scripts/lib/*.sh
+      - name: hadolint web-spa Dockerfile
+        run: docker run --rm -i "$HADOLINT_IMAGE" hadolint --failure-threshold warning - < infrastructure/docker/web-spa.Dockerfile
+      - name: kubeconform manifests
+        run: |
+          docker run --rm -v "$PWD/infrastructure/kubernetes:/manifests:ro" "$KUBECONFORM_IMAGE" \
+            -strict -summary -kubernetes-version 1.30.0 /manifests
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gnee/infrastructure/terraform/kubernetes
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, infra-lint]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build web-spa image
+        # Placeholder public config only — nothing secret is ever baked into the SPA bundle
+        run: |
+          docker build -f infrastructure/docker/web-spa.Dockerfile \
+            --build-arg VITE_ZUMA_GATEWAY_URL=https://api.example.invalid/graphql \
+            --build-arg VITE_OIDC_AUTHORITY=https://idp.example.invalid \
+            --build-arg VITE_OIDC_CLIENT_ID=ci \
+            --build-arg VITE_OIDC_REDIRECT_URI=https://wallet.example.invalid/callback \
+            -t gnee/web-spa:ci .
+      - name: Smoke-test container (non-root, rendered CSP, /healthz)
+        run: |
+          docker run -d --name web-spa-ci --cap-drop ALL --security-opt no-new-privileges:true \
+            -e ZUMA_GATEWAY_ORIGIN=https://api.example.invalid \
+            -e OIDC_AUTHORITY_ORIGIN=https://idp.example.invalid \
+            -p 127.0.0.1:8080:8080 gnee/web-spa:ci
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 1; done
+          curl -fsSI http://127.0.0.1:8080/ | tee headers.txt
+          grep -qi '^content-security-policy:.*connect-src .self. https://api.example.invalid https://idp.example.invalid' headers.txt
+          test "$(docker exec web-spa-ci id -u)" != "0"
+      - name: Container logs
+        if: ${{ failure() }}
+        run: docker logs web-spa-ci || true
+      - name: Scan web-spa image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: gnee/web-spa:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22

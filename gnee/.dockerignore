@@ -1,0 +1,39 @@
+# Build context = gnee/ root (see infrastructure/docker/web-spa.Dockerfile). Keep it small and
+# secret-free: no installed deps, env files, build/test output, VCS data or native projects.
+node_modules
+**/node_modules
+.env
+.env.*
+**/.env
+**/.env.*
+dist
+**/dist
+test-results
+**/test-results
+playwright-report
+**/playwright-report
+blob-report
+**/blob-report
+coverage
+**/coverage
+*.tsbuildinfo
+**/*.tsbuildinfo
+.git
+.github
+.devcontainer
+**/.devcontainer
+.vscode
+.idea
+*.log
+# Expo-generated native projects and mobile build output
+apps/ios/ios
+apps/android/android
+**/.expo
+**/*.apk
+**/*.aab
+**/*.ipa
+**/google-service-account.json
+**/*.p8
+infrastructure/kubernetes
+infrastructure/terraform
+scripts

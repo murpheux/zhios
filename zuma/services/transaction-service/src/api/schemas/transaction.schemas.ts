@@ -1,6 +1,12 @@
 // Fastify JSON schemas for transaction routes; doubles as the OpenAPI source for @fastify/swagger.
-const transactionKindEnum = ['send', 'receive'];
-const transactionStatusEnum = ['pending', 'broadcast', 'confirmed', 'failed'];
+import { OBJECT_ID_PATTERN, SATS_AMOUNT_PATTERN, SATS_BALANCE_PATTERN } from '@zuma/shared-common';
+import { BITCOIN_ADDRESS_SHAPE_PATTERN } from '../../domain/value-objects/bitcoin-address';
+import { IDEMPOTENCY_KEY_PATTERN } from '../../application/use-cases/create-transaction.use-case';
+
+const transactionKindEnum = ['send', 'receive', 'internal-transfer'];
+const transactionStatusEnum = ['pending', 'broadcasting', 'broadcast', 'confirmed', 'failed'];
+// sat/vB, 1..10000, kept as a decimal string (the historical wire type).
+const FEE_RATE_PATTERN = '^([1-9][0-9]{0,3}|10000)$';
 
 export const errorResponseSchema = {
   type: 'object',
@@ -20,9 +26,12 @@ export const transactionResponseSchema = {
     walletId: { type: 'string' },
     txid: { type: ['string', 'null'] },
     type: { type: 'string', enum: transactionKindEnum },
-    amount: { type: 'string' },
-    feeRate: { type: 'string' },
+    amount: { type: 'string', description: 'Satoshis' },
+    feeRate: { type: 'string', description: 'sat/vB' },
+    feeSats: { type: 'string', pattern: SATS_BALANCE_PATTERN, description: 'Total fee in satoshis' },
+    destinationAddress: { type: 'string' },
     status: { type: 'string', enum: transactionStatusEnum },
+    failureReason: { type: ['string', 'null'] },
     confirmations: { type: 'number' },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
@@ -44,43 +53,54 @@ export const transactionResponseSchema = {
 
 export const transactionParamsSchema = {
   type: 'object',
-  properties: { id: { type: 'string', minLength: 1 } },
+  properties: { id: { type: 'string', pattern: OBJECT_ID_PATTERN } },
   required: ['id'],
 } as const;
 
 export const createTransactionSchema = {
-  description: 'Create (build + sign) a new transaction. Supports a client-supplied Idempotency-Key header to make retries safe.',
+  description:
+    'Create (build + sign) a send and debit amount + fee from the wallet. Requires an Idempotency-Key header; replays with the same key and body return the original transaction.',
   tags: ['transactions'],
   security: [{ bearerAuth: [] }],
   headers: {
     type: 'object',
     properties: {
-      'idempotency-key': { type: 'string', description: 'Unique key; replays with the same key return the original transaction' },
+      'idempotency-key': {
+        type: 'string',
+        pattern: IDEMPOTENCY_KEY_PATTERN,
+        description: 'Required. Unique per request; replays with the same key return the original transaction',
+      },
     },
+    required: ['idempotency-key'],
   },
   body: {
     type: 'object',
+    additionalProperties: false,
     properties: {
-      walletId: { type: 'string', minLength: 1 },
-      type: { type: 'string', enum: transactionKindEnum },
-      amount: { type: 'string', minLength: 1 },
-      feeRate: { type: 'string', minLength: 1 },
-      destinationAddress: { type: 'string', minLength: 1 },
+      walletId: { type: 'string', pattern: OBJECT_ID_PATTERN },
+      // Only sends originate from the API; receives are recorded by chain observation.
+      type: { type: 'string', enum: ['send'] },
+      amount: { type: 'string', pattern: SATS_AMOUNT_PATTERN, description: 'Satoshis' },
+      feeRate: { type: 'string', pattern: FEE_RATE_PATTERN, description: 'sat/vB, 1..10000' },
+      // Shape only here; the network-specific (bech32/bech32m checksum) check runs against the wallet's network.
+      destinationAddress: { type: 'string', maxLength: 90, pattern: BITCOIN_ADDRESS_SHAPE_PATTERN },
     },
     required: ['walletId', 'type', 'amount', 'feeRate', 'destinationAddress'],
     examples: [
       {
         walletId: '6710f1f1c2a1b2c3d4e5f6a7',
         type: 'send',
-        amount: '0.001',
+        amount: '100000',
         feeRate: '12',
-        destinationAddress: 'tb1q...',
+        destinationAddress: 'tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q0sl5k7',
       },
     ],
   },
   response: {
     201: transactionResponseSchema,
     400: errorResponseSchema,
+    403: errorResponseSchema,
+    409: errorResponseSchema,
   },
 } as const;
 
@@ -98,11 +118,13 @@ export const getTransactionSchema = {
           walletId: '6710f1f1c2a1b2c3d4e5f6a7',
           txid: null,
           type: 'send',
-          amount: '0.001',
+          amount: '100000',
           feeRate: '12',
+          feeSats: '1692',
+          destinationAddress: 'tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q0sl5k7',
           status: 'pending',
+          failureReason: null,
           confirmations: 0,
-          rawTx: 'rawtx:...:signed',
           createdAt: '2024-10-13T12:00:00.000Z',
           updatedAt: '2024-10-13T12:00:00.000Z',
         },
@@ -121,7 +143,7 @@ export const listTransactionsSchema = {
     properties: {
       page: { type: 'integer', minimum: 1, default: 1 },
       limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-      walletId: { type: 'string' },
+      walletId: { type: 'string', pattern: OBJECT_ID_PATTERN },
       status: { type: 'string', enum: transactionStatusEnum },
       from: { type: 'string', format: 'date-time' },
       to: { type: 'string', format: 'date-time' },
@@ -155,14 +177,17 @@ export const validateTransactionSchema = {
 } as const;
 
 export const broadcastTransactionSchema = {
-  description: 'Broadcast a validated transaction to the network',
+  description:
+    'Broadcast a funded pending transaction (owner only). Node rejection marks it failed and refunds the wallet.',
   tags: ['transactions'],
   security: [{ bearerAuth: [] }],
   params: transactionParamsSchema,
   response: {
     200: transactionResponseSchema,
     400: errorResponseSchema,
+    403: errorResponseSchema,
     404: errorResponseSchema,
+    409: errorResponseSchema,
   },
 } as const;
 

@@ -14,18 +14,21 @@
   "scripts": {
     "build": "tsc -b tsconfig.json",
     "clean": "tsc -b tsconfig.json --clean",
-    "lint": "eslint .",
+    "lint": "biome lint .",
     "typecheck": "tsc -b tsconfig.json",
     "test": "npm run build --silent && npm test --workspaces --if-present",
+    "test:unit": "npm test --workspaces --if-present -- --testPathIgnorePatterns repository",
+    "test:integration": "npm test --workspaces --if-present -- --testPathPattern repository",
+    "test:coverage": "npm run test:coverage --workspaces --if-present",
+    "coverage:summary": "node scripts/coverage-summary.mjs",
     "dev:wallet": "npm run dev -w @zuma/wallet-service",
     "dev:transaction": "npm run dev -w @zuma/transaction-service",
-    "dev:graphql": "npm run dev -w @zuma/graphql-gateway"
+    "dev:graphql": "npm run dev -w @zuma/graphql-gateway",
+    "format:check": "biome format ."
   },
   "devDependencies": {
     "typescript": "^5.6.3",
-    "@typescript-eslint/eslint-plugin": "^8.8.0",
-    "@typescript-eslint/parser": "^8.8.0",
-    "eslint": "^9.12.0",
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.0.1",
+    "@biomejs/biome": "^2.2.0"
   }
 }

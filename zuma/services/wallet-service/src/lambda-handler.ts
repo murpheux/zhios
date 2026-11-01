@@ -12,13 +12,18 @@ let cachedHandler: Handler | undefined;
 
 // Resolves JWT_SECRET/MONGODB_URI from Secrets Manager/SSM at cold start when ARNs are configured.
 const hydrateSecretsFromAws = async (): Promise<void> => {
-  const secretArn = process.env.JWT_SECRET_ARN;
-  if (secretArn) {
-    const client = new SecretsManagerClient({});
-    const result = await client.send(new GetSecretValueCommand({ SecretId: secretArn }));
-    if (result.SecretString) {
-      process.env.JWT_SECRET = result.SecretString;
+  const secretsByEnvName: Array<[target: string, arn: string | undefined]> = [
+    ['JWT_SECRET', process.env.JWT_SECRET_ARN],
+    ['INTERNAL_JWT_SECRET', process.env.INTERNAL_JWT_SECRET_ARN],
+  ];
+  const secretsClient = new SecretsManagerClient({});
+  for (const [target, arn] of secretsByEnvName) {
+    if (!arn) continue;
+    const result = await secretsClient.send(new GetSecretValueCommand({ SecretId: arn }));
+    if (!result.SecretString) {
+      throw new Error(`Secrets Manager secret for ${target} has no SecretString`);
     }
+    process.env[target] = result.SecretString;
   }
 
   const parameterName = process.env.MONGODB_URI_PARAMETER_NAME;
@@ -41,10 +46,10 @@ const getHandler = async (): Promise<Handler> => {
   await hydrateSecretsFromAws();
 
   const config = loadWalletServiceConfig();
-  const logger = createLogger({ serviceName: 'wallet-service', level: config.LOG_LEVEL });
+  const logger = createLogger({ serviceName: config.SERVICE_NAME, level: config.LOG_LEVEL });
 
   // Small pool size: Lambda instances are short-lived and run one invocation at a time.
-  await connectMongo(config.MONGODB_URI, logger, { maxPoolSize: 5 });
+  await connectMongo(config.MONGODB_URI, logger, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
   const app = await buildApp({ config, logger });
 
   // @fastify/aws-lambda expects FastifyBaseLogger; our pino instance is runtime-compatible but typed

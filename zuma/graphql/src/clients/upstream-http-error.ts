@@ -1,4 +1,5 @@
-// Thrown when an upstream REST service returns a non-2xx response; carries the status for GraphQL error mapping.
+// Thrown when an upstream REST call fails; carries a status/code for GraphQL error mapping.
+// `message` is always client-safe: upstream 4xx domain messages, or a generic text otherwise.
 export class UpstreamHttpError extends Error {
   constructor(
     public readonly statusCode: number,

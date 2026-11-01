@@ -1,11 +1,7 @@
 import fastify from 'fastify';
 import type { Logger } from '@zuma/shared-logging';
-import { observabilityPlugin } from '@zuma/shared-observability';
-import { mapErrorToHttp } from '@zuma/shared-common';
 import type { WalletServiceConfig } from './config/wallet-service-config';
-import authPlugin from './api/plugins/auth';
-import healthPlugin from './api/plugins/health';
-import swaggerPlugin from './api/plugins/swagger';
+import { platformServerOptions, registerPlatformPlugins } from './api/plugins/platform';
 import { walletRoutes } from './api/routes/wallet.routes';
 import { MongooseWalletRepository } from './infrastructure/persistence/wallet.repository';
 import { MockAddressGenerator } from './infrastructure/clients/mock-address-generator';
@@ -16,6 +12,13 @@ import { ListWalletsUseCase } from './application/use-cases/list-wallets.use-cas
 import { GetWalletBalanceUseCase } from './application/use-cases/get-wallet-balance.use-case';
 import { GetWalletTransactionHistoryUseCase } from './application/use-cases/get-wallet-transaction-history.use-case';
 import { UpdateWalletMetadataUseCase } from './application/use-cases/update-wallet-metadata.use-case';
+import { internalWalletRoutes } from './api/routes/internal-wallet.routes';
+import { MongooseLedgerRepository } from './infrastructure/persistence/ledger.repository';
+import { LedgerMovementService } from './application/services/ledger-movement.service';
+import { DebitWalletUseCase } from './application/use-cases/debit-wallet.use-case';
+import { RefundWalletUseCase } from './application/use-cases/refund-wallet.use-case';
+import { DepositToWalletUseCase } from './application/use-cases/deposit-to-wallet.use-case';
+import { GetWalletForServiceUseCase } from './application/use-cases/get-wallet-for-service.use-case';
 
 export interface BuildAppOptions {
   config: WalletServiceConfig;
@@ -24,23 +27,19 @@ export interface BuildAppOptions {
 
 // Composition root: wires infrastructure adapters into use-cases and registers Fastify plugins/routes.
 export const buildApp = async ({ config, logger }: BuildAppOptions) => {
-  const app = fastify({ loggerInstance: logger });
+  const app = fastify({ loggerInstance: logger, ...platformServerOptions(config) });
 
   const walletRepository = new MongooseWalletRepository();
+  const ledgerRepository = new MongooseLedgerRepository();
+  const ledgerMovementService = new LedgerMovementService(walletRepository, ledgerRepository);
   const addressGenerator = new MockAddressGenerator();
   const transactionHistoryClient = new TransactionHistoryHttpClient({
     baseUrl: config.TRANSACTION_SERVICE_URL,
   });
 
-  await app.register(observabilityPlugin, { metricsEnabled: config.METRICS_ENABLED });
-  await app.register(authPlugin, {
-    jwtSecret: config.JWT_SECRET,
-    jwtIssuer: config.JWT_ISSUER,
-    jwksUri: config.JWT_JWKS_URI,
-    jwtAudience: config.JWT_AUDIENCE,
-  });
-  await app.register(healthPlugin);
-  await app.register(swaggerPlugin);
+  // Metrics, helmet/CORS/rate-limit, user + service auth (requireAuth/requireService), probes,
+  // docs and the shared error handler — before routes so swagger sees them.
+  await registerPlatformPlugins(app, config);
 
   await app.register(walletRoutes, {
     prefix: '/api/v1',
@@ -53,18 +52,15 @@ export const buildApp = async ({ config, logger }: BuildAppOptions) => {
       transactionHistoryClient,
     ),
     updateWalletMetadataUseCase: new UpdateWalletMetadataUseCase(walletRepository),
+    depositToWalletUseCase: new DepositToWalletUseCase(ledgerMovementService),
   });
 
-  app.setErrorHandler((error, request, reply) => {
-    if (error instanceof Error && 'validation' in error && error.validation) {
-      reply.status(400).send({ statusCode: 400, code: 'VALIDATION_ERROR', message: error.message });
-      return;
-    }
-    const body = mapErrorToHttp(error);
-    if (body.statusCode >= 500) {
-      request.log.error({ err: error }, 'unhandled error');
-    }
-    reply.status(body.statusCode).send(body);
+  // Service-to-service routes (x-service-token); keep /internal/* off the public ingress.
+  await app.register(internalWalletRoutes, {
+    prefix: '/internal',
+    debitWalletUseCase: new DebitWalletUseCase(ledgerMovementService),
+    refundWalletUseCase: new RefundWalletUseCase(ledgerMovementService, ledgerRepository),
+    getWalletForServiceUseCase: new GetWalletForServiceUseCase(walletRepository),
   });
 
   return app;

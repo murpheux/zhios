@@ -1,9 +1,13 @@
 import type { CreateTransactionDto, PaginatedResult, TransactionDto } from '@zuma/shared-common';
-import { UpstreamHttpError } from './upstream-http-error';
+import {
+  DEFAULT_UPSTREAM_TIMEOUT_MS,
+  upstreamHealthCheck,
+  upstreamRequest,
+  type UpstreamClientOptions,
+  type UpstreamRequestOptions,
+} from './upstream-request';
 
-export interface TransactionServiceClientOptions {
-  baseUrl: string;
-}
+export type TransactionServiceClientOptions = UpstreamClientOptions;
 
 export interface ListTransactionsParams {
   page?: number;
@@ -14,12 +18,16 @@ export interface ListTransactionsParams {
   to?: string;
 }
 
+const UPSTREAM = 'transaction-service';
+
 // Typed wrapper over transaction-service's REST API; forwards the caller's bearer token.
 export class TransactionServiceClient {
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
 
   constructor(opts: TransactionServiceClientOptions) {
     this.baseUrl = opts.baseUrl;
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS;
   }
 
   async getTransaction(id: string, authorization?: string): Promise<TransactionDto> {
@@ -46,42 +54,25 @@ export class TransactionServiceClient {
     );
   }
 
+  // `idempotencyKey` is forwarded as the Idempotency-Key header so client retries are safe.
   async createTransaction(
     input: CreateTransactionDto,
+    idempotencyKey: string,
     authorization?: string,
   ): Promise<TransactionDto> {
     return this.request<TransactionDto>('/api/v1/transactions', {
       method: 'POST',
       body: input,
       authorization,
+      headers: { 'idempotency-key': idempotencyKey },
     });
   }
 
-  private async request<T>(
-    path: string,
-    opts: { method?: string; body?: unknown; authorization?: string } = {},
-  ): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method: opts.method ?? 'GET',
-      headers: {
-        'content-type': 'application/json',
-        ...(opts.authorization ? { authorization: opts.authorization } : {}),
-      },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    });
+  async healthCheck(timeoutMs = 2000): Promise<void> {
+    await upstreamHealthCheck(UPSTREAM, this.baseUrl, timeoutMs);
+  }
 
-    if (!response.ok) {
-      const body = (await response.json().catch(() => ({}))) as {
-        code?: string;
-        message?: string;
-      };
-      throw new UpstreamHttpError(
-        response.status,
-        body.code ?? 'UPSTREAM_ERROR',
-        body.message ?? `transaction-service request failed with status ${response.status}`,
-      );
-    }
-
-    return (await response.json()) as T;
+  private request<T>(path: string, opts: UpstreamRequestOptions = {}): Promise<T> {
+    return upstreamRequest<T>(UPSTREAM, this.baseUrl, path, { timeoutMs: this.timeoutMs, ...opts });
   }
 }

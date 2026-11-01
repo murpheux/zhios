@@ -1,5 +1,5 @@
-import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { ZumaApiError } from "@gnee/api-client";
 import { CreateWalletScreen } from "./CreateWalletScreen";
 import { useZuma } from "../ZumaProvider";
 
@@ -18,17 +18,30 @@ describe("CreateWalletScreen", () => {
     );
 
     fireEvent.changeText(getByPlaceholderText("Primary hot wallet"), "My wallet");
-    fireEvent.changeText(getByPlaceholderText("user-123"), "user-456");
+    fireEvent.press(getByText("regtest"));
     fireEvent.press(getByText("Create wallet"));
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({
         label: "My wallet",
-        ownerUserId: "user-456",
-        network: "testnet",
-        type: "hot",
+        network: "REGTEST",
+        type: "HOT",
       })
     );
     expect(navigation.replace).toHaveBeenCalledWith("WalletDetail", { walletId: "wallet-9" });
+  });
+
+  it("has no owner user id field and maps errors", async () => {
+    const create = jest.fn().mockRejectedValue(new ZumaApiError("Forbidden", { code: "FORBIDDEN" }));
+    mockedUseZuma.mockReturnValue({ wallets: { create }, transactions: {} } as any);
+
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <CreateWalletScreen navigation={{ replace: jest.fn() } as any} route={{ key: "x", name: "CreateWallet" }} />
+    );
+    expect(queryByText(/Owner user id/i)).toBeNull();
+
+    fireEvent.changeText(getByPlaceholderText("Primary hot wallet"), "My wallet");
+    fireEvent.press(getByText("Create wallet"));
+    await waitFor(() => expect(getByText("You don't have permission to use this wallet.")).toBeTruthy());
   });
 });

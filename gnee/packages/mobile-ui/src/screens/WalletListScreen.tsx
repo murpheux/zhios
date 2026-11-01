@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, SafeAreaView, Text, View } from "react-native";
+import { describeZumaError, formatBtc, humanizeEnum, type Wallet } from "@gnee/api-client";
+import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { Wallet } from "@gnee/api-client";
-import { useZuma } from "../ZumaProvider";
+import { useCallback, useState } from "react";
+import { FlatList, Pressable, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../navigation";
+import { useZuma } from "../ZumaProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "WalletList">;
 
@@ -13,22 +15,19 @@ export function WalletListScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // useFocusEffect callbacks must return void/cleanup, not a promise — hence the .then chain.
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    try {
-      const { items } = await zuma.wallets.list({ page: 1, limit: 25 });
-      setWallets(items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load wallets");
-    } finally {
-      setLoading(false);
-    }
+    zuma.wallets
+      .list({ page: 1, limit: 25 })
+      .then(({ items }) => setWallets(items))
+      .catch((err: unknown) => setError(describeZumaError(err, "Failed to load wallets")))
+      .finally(() => setLoading(false));
   }, [zuma]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Refetch whenever the list regains focus (e.g. after creating a wallet or sending).
+  useFocusEffect(load);
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
@@ -39,14 +38,17 @@ export function WalletListScreen({ navigation }: Props) {
         </Pressable>
       </View>
 
-      {loading && <Text style={{ padding: 16 }}>Loading…</Text>}
-      {error && <Text style={{ padding: 16, color: "#dc2626" }}>{error}</Text>}
+      {loading && wallets.length === 0 ? <Text style={{ padding: 16 }}>Loading…</Text> : null}
+      {error ? <Text style={{ padding: 16, color: "#dc2626" }}>{error}</Text> : null}
 
       <FlatList
         data={wallets}
         keyExtractor={(item) => item.id}
         onRefresh={load}
         refreshing={loading}
+        ListEmptyComponent={
+          !loading && !error ? <Text style={{ padding: 16, color: "#6b7280" }}>No wallets yet.</Text> : null
+        }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => navigation.navigate("WalletDetail", { walletId: item.id })}
@@ -54,7 +56,7 @@ export function WalletListScreen({ navigation }: Props) {
           >
             <Text style={{ fontWeight: "600" }}>{item.label}</Text>
             <Text style={{ color: "#6b7280" }}>
-              {item.network} · {item.balanceCache} sats
+              {humanizeEnum(item.network)} · {formatBtc(item.balanceCache)}
             </Text>
           </Pressable>
         )}

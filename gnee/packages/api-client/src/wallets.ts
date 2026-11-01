@@ -1,5 +1,11 @@
 import type { ZumaClient } from "./client";
-import type { CreateWalletInput, ListWalletsParams, Wallet, WalletConnection } from "./types";
+import type {
+  CreateWalletInput,
+  ListWalletsParams,
+  UpdateWalletMetadataInput,
+  Wallet,
+  WalletConnection,
+} from "./types";
 
 const WALLET_FIELDS = /* GraphQL */ `
   id
@@ -36,6 +42,12 @@ const CREATE_WALLET = /* GraphQL */ `
   }
 `;
 
+const UPDATE_WALLET_METADATA = /* GraphQL */ `
+  mutation UpdateWalletMetadata($id: ID!, $input: UpdateWalletMetadataInput!) {
+    updateWalletMetadata(id: $id, input: $input) { ${WALLET_FIELDS} }
+  }
+`;
+
 export function createWalletsApi(client: ZumaClient) {
   return {
     get(id: string) {
@@ -52,6 +64,14 @@ export function createWalletsApi(client: ZumaClient) {
       return client
         .request<{ createWallet: Wallet }, { input: CreateWalletInput }>(CREATE_WALLET, { input })
         .then((d) => d.createWallet);
+    },
+    updateMetadata(id: string, input: UpdateWalletMetadataInput) {
+      return client
+        .request<{ updateWalletMetadata: Wallet }, { id: string; input: UpdateWalletMetadataInput }>(
+          UPDATE_WALLET_METADATA,
+          { id, input }
+        )
+        .then((d) => d.updateWalletMetadata);
     },
   };
 }

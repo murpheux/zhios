@@ -11,5 +11,6 @@ describe("createZumaApi", () => {
     expect(api.transactions).toBeDefined();
     expect(typeof api.wallets.list).toBe("function");
     expect(typeof api.transactions.create).toBe("function");
+    expect(typeof api.wallets.updateMetadata).toBe("function");
   });
 });

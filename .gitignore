@@ -351,3 +351,23 @@ Temporary Items
 # End of https://www.toptal.com/developers/gitignore/api/node,react,reactnative
 # Added by ggshield
 .cache_ggshield
+
+### Terraform ###
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+### Test artefacts ###
+**/test-results/
+**/playwright-report/
+
+### zhios local deploy ###
+# Root .env is covered by ".env" above; Terraform docker state holds container env (secrets)
+infrastructure/terraform/docker/terraform.tfvars
+infrastructure/terraform/docker/*.auto.tfvars

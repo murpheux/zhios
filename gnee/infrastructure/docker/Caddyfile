@@ -1,0 +1,20 @@
+# TLS-terminating reverse proxy for the gnee web-spa swarm stack (web-spa-stack.yml).
+# Certificate source — pick ONE in the site block below:
+#   tls internal                        Caddy's local CA; fine for LAN hosts (trust its root CA
+#                                        on clients: /data/caddy/pki/authorities/local/root.crt)
+#   (no tls line)                       automatic public ACME (Let's Encrypt); needs public DNS
+#                                        for SITE_ADDRESS and inbound 80/443
+#   tls /run/secrets/tls_cert /run/secrets/tls_key
+#                                        bring-your-own cert via `docker secret create` + a
+#                                        `secrets:` entry on tls-proxy in web-spa-stack.yml
+{
+	admin off
+}
+
+{$SITE_ADDRESS} {
+	tls internal
+	encode zstd gzip
+	reverse_proxy web-spa:8080 {
+		health_uri /healthz
+	}
+}

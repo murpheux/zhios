@@ -7,12 +7,12 @@ function makeWallet(overrides: Partial<Wallet> = {}): Wallet {
     id: "wallet-1",
     label: "Primary hot wallet",
     address: "tb1qexample",
-    network: "testnet",
-    type: "hot",
+    network: "TESTNET",
+    type: "HOT",
     balanceCache: "0",
     metadata: {},
     ownerUserId: "user-123",
-    status: "active",
+    status: "ACTIVE",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -53,10 +53,24 @@ describe("createWalletsApi", () => {
     client.request.mockResolvedValue({ createWallet: wallet });
 
     const api = createWalletsApi(client);
-    const input = { label: "New wallet", network: "testnet", type: "hot", ownerUserId: "user-123" };
+    const input = { label: "New wallet", network: "TESTNET" as const, type: "HOT" as const };
     await expect(api.create(input)).resolves.toEqual(wallet);
     expect(client.request).toHaveBeenCalledWith(expect.stringContaining("mutation CreateWallet"), {
       input,
+    });
+    expect(client.request.mock.calls[0][1].input).not.toHaveProperty("ownerUserId");
+  });
+
+  it("updateMetadata() sends id + input and unwraps updateWalletMetadata", async () => {
+    const client = makeClient();
+    const wallet = makeWallet({ label: "Renamed" });
+    client.request.mockResolvedValue({ updateWalletMetadata: wallet });
+
+    const api = createWalletsApi(client);
+    await expect(api.updateMetadata("wallet-1", { label: "Renamed" })).resolves.toEqual(wallet);
+    expect(client.request).toHaveBeenCalledWith(expect.stringContaining("mutation UpdateWalletMetadata"), {
+      id: "wallet-1",
+      input: { label: "Renamed" },
     });
   });
 });

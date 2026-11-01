@@ -5,7 +5,10 @@ import { AuthProvider } from "./auth/AuthContext";
 import { ZumaProvider } from "./ZumaProvider";
 import App from "./App";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("index.html is missing #root");
+
+ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>

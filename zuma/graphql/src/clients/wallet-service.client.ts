@@ -4,11 +4,15 @@ import type {
   UpdateWalletMetadataDto,
   WalletDto,
 } from '@zuma/shared-common';
-import { UpstreamHttpError } from './upstream-http-error';
+import {
+  DEFAULT_UPSTREAM_TIMEOUT_MS,
+  upstreamHealthCheck,
+  upstreamRequest,
+  type UpstreamClientOptions,
+  type UpstreamRequestOptions,
+} from './upstream-request';
 
-export interface WalletServiceClientOptions {
-  baseUrl: string;
-}
+export type WalletServiceClientOptions = UpstreamClientOptions;
 
 export interface ListWalletsParams {
   page?: number;
@@ -16,12 +20,16 @@ export interface ListWalletsParams {
   ownerUserId?: string;
 }
 
+const UPSTREAM = 'wallet-service';
+
 // Typed wrapper over wallet-service's REST API; forwards the caller's bearer token.
 export class WalletServiceClient {
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
 
   constructor(opts: WalletServiceClientOptions) {
     this.baseUrl = opts.baseUrl;
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS;
   }
 
   async getWallet(id: string, authorization?: string): Promise<WalletDto> {
@@ -62,31 +70,11 @@ export class WalletServiceClient {
     });
   }
 
-  private async request<T>(
-    path: string,
-    opts: { method?: string; body?: unknown; authorization?: string } = {},
-  ): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method: opts.method ?? 'GET',
-      headers: {
-        'content-type': 'application/json',
-        ...(opts.authorization ? { authorization: opts.authorization } : {}),
-      },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    });
+  async healthCheck(timeoutMs = 2000): Promise<void> {
+    await upstreamHealthCheck(UPSTREAM, this.baseUrl, timeoutMs);
+  }
 
-    if (!response.ok) {
-      const body = (await response.json().catch(() => ({}))) as {
-        code?: string;
-        message?: string;
-      };
-      throw new UpstreamHttpError(
-        response.status,
-        body.code ?? 'UPSTREAM_ERROR',
-        body.message ?? `wallet-service request failed with status ${response.status}`,
-      );
-    }
-
-    return (await response.json()) as T;
+  private request<T>(path: string, opts: UpstreamRequestOptions = {}): Promise<T> {
+    return upstreamRequest<T>(UPSTREAM, this.baseUrl, path, { timeoutMs: this.timeoutMs, ...opts });
   }
 }

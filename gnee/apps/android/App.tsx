@@ -1,26 +1,20 @@
-import React from "react";
+import { resolveGatewayUrl, ZumaMobileApp } from "@gnee/mobile-ui";
 import Constants from "expo-constants";
+import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
-import { ZumaProvider, RootNavigator } from "@gnee/mobile-ui";
 
-const ZUMA_GATEWAY_URL: string =
-  (Constants.expoConfig?.extra?.zumaGatewayUrl as string | undefined) ??
-  "http://10.0.2.2:3003/graphql";
+// EXPO_PUBLIC_* is inlined by Metro at bundle time; app.config.ts also copies it into extra.
+const GATEWAY_URL = resolveGatewayUrl(
+  process.env.EXPO_PUBLIC_ZUMA_GATEWAY_URL,
+  Constants.expoConfig?.extra?.zumaGatewayUrl,
+  "http://10.0.2.2:3003/graphql"
+);
 
-async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync("zuma_jwt");
-}
+const getToken = () => SecureStore.getItemAsync("zuma_jwt");
+// Hermes has no global crypto; expo-crypto supplies a CSPRNG-backed UUID for Idempotency-Key.
+const createIdempotencyKey = () => Crypto.randomUUID();
 
-/**
- * apps/android entry point. Thin by design: screens and business logic are
- * shared verbatim with apps/ios via @gnee/mobile-ui / @gnee/api-client; this
- * file only wires platform-specific concerns (package name, secure token
- * storage, Android-only config such as the emulator loopback host).
- */
+/** apps/android entry point — Android (10.0.2.2 = host loopback from the emulator). Everything else lives in @gnee/mobile-ui. */
 export default function App() {
-  return (
-    <ZumaProvider endpoint={ZUMA_GATEWAY_URL} getToken={getToken}>
-      <RootNavigator />
-    </ZumaProvider>
-  );
+  return <ZumaMobileApp gatewayUrl={GATEWAY_URL} getToken={getToken} createIdempotencyKey={createIdempotencyKey} />;
 }

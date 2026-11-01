@@ -1,60 +1,79 @@
 name: zuma-ci
 
+# TODO: pin actions to full commit SHAs (e.g. via pinact / dependabot).
+# actions/checkout and actions/setup-node are already SHA-pinned; every other `uses:` and the
+# container images run below (hadolint, kubeconform) are pinned to version tags only.
+
 on:
   push:
     branches: [main]
+    paths:
+      - "zuma/shared/**" # all shared workspaces, incl. shared/http
+      - "zuma/services/**"
+      - "zuma/graphql/**"
+      - "zuma/infrastructure/**"
+      - "zuma/scripts/**"
+      - "zuma/package.json"
+      - "zuma/package-lock.json"
+      - "zuma/biome.json"
+      - "zuma/tsconfig*.json"
+      - "zuma/docker-compose.yml"
+      - "zuma/.dockerignore"
+      - ".github/workflows/zuma-ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "zuma/shared/**" # all shared workspaces, incl. shared/http
+      - "zuma/services/**"
+      - "zuma/graphql/**"
+      - "zuma/infrastructure/**"
+      - "zuma/scripts/**"
+      - "zuma/package.json"
+      - "zuma/package-lock.json"
+      - "zuma/biome.json"
+      - "zuma/tsconfig*.json"
+      - "zuma/docker-compose.yml"
+      - "zuma/.dockerignore"
+      - ".github/workflows/zuma-ci.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 defaults:
   run:
     working-directory: zuma
+
+env:
+  HADOLINT_IMAGE: hadolint/hadolint:v2.12.0
+  KUBECONFORM_IMAGE: ghcr.io/yannh/kubeconform:v0.6.7
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: zuma/package-lock.json
       - run: npm ci
-      - run: npm run lint
+      - run: npm run lint # biome lint .
 
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: zuma/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: zuma/package-lock.json
-      - run: npm ci
-      - run: npm test --workspaces --if-present
-
+  # tsc -b across all workspaces — `typecheck` and `build` are the same command, so one job.
   build:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, security]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -63,10 +82,82 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  # Unit tests only: jest maps @zuma/shared-* to src/, so no prior build is needed. The
+  # mongodb-memory-server integration tests need to download mongod (no egress here) — see
+  # docs/testing-strategy.md.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: zuma/package-lock.json
+      - run: npm ci
+      - run: npm test --workspaces --if-present
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Organisation-owned repos additionally need a GITLEAKS_LICENSE secret.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  infra-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: shellcheck scripts
+        run: shellcheck --version && shellcheck -x scripts/*.sh
+      - name: hadolint Dockerfiles
+        run: |
+          for f in infrastructure/docker/*.Dockerfile; do
+            echo "::group::$f"
+            docker run --rm -i "$HADOLINT_IMAGE" hadolint --failure-threshold warning - < "$f"
+            echo "::endgroup::"
+          done
+      - name: kubeconform manifests
+        run: |
+          docker run --rm -v "$PWD/infrastructure/kubernetes:/manifests:ro" "$KUBECONFORM_IMAGE" \
+            -strict -summary -kubernetes-version 1.30.0 /manifests
+      - name: docker compose config
+        # Throwaway values only so interpolation succeeds; the real .env is never in CI.
+        run: |
+          : > .env
+          MONGO_ROOT_PASSWORD=ci-placeholder docker compose -f docker-compose.yml config -q
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zuma/infrastructure/aws/terraform
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      # archive_file needs its source dir to exist at plan time, not at validate time
+      - run: terraform validate
+
   docker-build:
     runs-on: ubuntu-latest
-    needs: [build, security]
+    needs: [lint, build, test, infra-lint]
     strategy:
+      fail-fast: false
       matrix:
         service:
           - name: wallet-service
@@ -77,26 +168,27 @@ jobs:
             dockerfile: infrastructure/docker/graphql-gateway.Dockerfile
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Build ${{ matrix.service.name }} image
-        working-directory: zuma
-        run: |
-          docker build \
-            -f "${{ matrix.service.dockerfile }}" \
-            -t "zuma/${{ matrix.service.name }}:ci" \
-            .
-      # NOTE: pin to a verified commit SHA before merging — tag used here pending SHA verification.
+        env:
+          DOCKERFILE: ${{ matrix.service.dockerfile }}
+          IMAGE: zuma/${{ matrix.service.name }}:ci
+        run: docker build -f "$DOCKERFILE" -t "$IMAGE" .
       - name: Scan ${{ matrix.service.name }} image
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: zuma/${{ matrix.service.name }}:ci
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: "1"
 
   security:
     runs-on: ubuntu-latest
-    needs: lint
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22

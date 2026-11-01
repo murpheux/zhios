@@ -1,0 +1,29 @@
+# Public HTTPS entry point for the GraphQL gateway (the gnee web-spa calls it cross-origin, so it
+# must be HTTPS too — an https page cannot call an http API). TLS cert issued by cert-manager.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: graphql-gateway
+  namespace: zuma
+  annotations:
+    # Placeholder — set to your ClusterIssuer (cert-manager must be installed in the cluster)
+    cert-manager.io/cluster-issuer: "CHANGE_ME-letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.wallet.example.com
+      secretName: graphql-gateway-tls
+  rules:
+    - host: api.wallet.example.com
+      http:
+        paths:
+          - path: /graphql
+            pathType: Prefix
+            backend:
+              service:
+                name: graphql-gateway
+                port:
+                  name: http

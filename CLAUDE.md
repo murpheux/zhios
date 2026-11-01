@@ -16,9 +16,9 @@ All run from `zuma/`:
 npm ci                                    # install (CI does this; use npm install locally after editing package.json)
 npm run build                             # tsc -b across all workspaces (project references)
 npm run typecheck                         # same as build, for type checking only
-npm run lint                              # eslint . (flat config, eslint.config.js)
+npm run lint                              # biome lint . (biome.json; formatter disabled for now)
 npm test                                  # build, then `npm test --workspaces --if-present`
-npm test --workspaces --if-present        # run every workspace's jest suite without rebuilding first
+npm test --workspaces --if-present        # run every workspace's jest suite (jest maps @zuma/shared-* to src, so no build needed)
 ```
 
 Run a single workspace's tests or a single file (jest, from `zuma/`):
@@ -55,7 +55,7 @@ Three deployables, each independently built/scaled/dockerized:
 | `services/transaction-service` | 3002 | Transaction creation, validation, broadcast, status (REST) |
 | `graphql` (`graphql-gateway`) | 3003 | GraphQL composition layer over both REST services (Fastify + Mercurius); no direct MongoDB access |
 
-Cross-service calls (not just gateway fan-out): `wallet-service` calls `transaction-service` directly (`TRANSACTION_SERVICE_URL`) to serve `GET /wallets/:id/transactions`; `transaction-service` calls `wallet-service` (`WALLET_SERVICE_URL`) to validate/debit wallets during transaction creation. Both REST APIs and the GraphQL gateway are valid client entry points and share the same use-cases.
+Cross-service calls (not just gateway fan-out): `wallet-service` calls `transaction-service` directly (`TRANSACTION_SERVICE_URL`) to serve `GET /wallets/:id/transactions`; `transaction-service` calls `wallet-service` (`WALLET_SERVICE_URL`) to check ownership/status and debit or refund wallets through service-only `/internal/wallets/:id/{debits,credits}` routes, authenticated by a short-lived `x-service-token` signed with `INTERNAL_JWT_SECRET` (never the user's token). Both REST APIs and the GraphQL gateway are valid client entry points and share the same use-cases.
 
 ### Clean Architecture layering (per service, under `src/`)
 
@@ -73,9 +73,14 @@ infrastructure/ Adapters: Mongoose repositories, HTTP clients, mock chain client
 ### Shared workspaces (`shared/*`)
 
 - `shared/common` — DTOs, error types, shared types
-- `shared/config` — `baseEnvSchema` (zod) in `env-schema.ts` with fields common to every service (`NODE_ENV`, `PORT`, `LOG_LEVEL`, `MONGODB_URI`, `JWT_SECRET`, `JWT_ISSUER`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `METRICS_ENABLED`); each service extends this with its own schema in `src/config/<service>-config.ts`
+- `shared/config` — `baseEnvSchema` (zod) in `env-schema.ts` with fields common to every service (`NODE_ENV`, `PORT`, `LOG_LEVEL`, `MONGODB_URI`, `JWT_SECRET`, `JWT_ISSUER`, `INTERNAL_JWT_SECRET`, CORS/rate-limit/timeout settings, `OTEL_EXPORTER_OTLP_ENDPOINT`, `METRICS_ENABLED`); each service extends this with its own schema in `src/config/<service>-config.ts`. Full env table: `infrastructure/README.md`
+- `shared/http` — Fastify plugins every service registers: auth (HS256 + OIDC/JWKS), `/healthz` + `/readyz`, security (helmet, CORS allowlist, rate limiting), service-to-service tokens (`requireService`, `allowServiceCallers`), error mapping, graceful shutdown
 - `shared/logging` — pino logger factory + redaction paths
 - `shared/observability` — OpenTelemetry Fastify plugin (`observabilityPlugin`), registered by every service; exports traces/metrics via OTLP — no collector is bundled in `docker-compose.yml`, so exporter calls fail silently with none present (safe for local dev)
+
+### Money invariants
+
+Amounts and balances are integer satoshis everywhere (strings on the wire, validated against `SATS_AMOUNT_PATTERN`). `wallet-service` owns balances via an idempotent ledger with guarded atomic debits; `POST /transactions` requires an `Idempotency-Key`, accepts `send` only, and enforces strict ownership on every write (admin/auditor are read-only). Lifecycle: `pending → broadcasting → broadcast → confirmed | failed` (failed sends are refunded). See `docs/domain-model.md`.
 
 ### Testing pyramid
 

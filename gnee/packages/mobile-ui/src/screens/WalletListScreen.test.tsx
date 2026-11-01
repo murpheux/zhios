@@ -1,5 +1,5 @@
-import React from "react";
 import { render, waitFor, fireEvent } from "@testing-library/react-native";
+import { ZumaApiError } from "@gnee/api-client";
 import { WalletListScreen } from "./WalletListScreen";
 import { useZuma } from "../ZumaProvider";
 
@@ -19,12 +19,12 @@ describe("WalletListScreen", () => {
           id: "wallet-1",
           label: "Primary hot wallet",
           address: "tb1qexample",
-          network: "testnet",
-          type: "hot",
-          balanceCache: "1000",
+          network: "TESTNET",
+          type: "HOT",
+          balanceCache: "150000",
           metadata: {},
           ownerUserId: "user-123",
-          status: "active",
+          status: "ACTIVE",
           createdAt: "",
           updatedAt: "",
         },
@@ -40,19 +40,22 @@ describe("WalletListScreen", () => {
 
     await waitFor(() => expect(getByText("Primary hot wallet")).toBeTruthy());
     expect(list).toHaveBeenCalledWith({ page: 1, limit: 25 });
+    expect(getByText("testnet · 0.00150000 BTC")).toBeTruthy();
 
     fireEvent.press(getByText("+ New"));
     expect(navigation.navigate).toHaveBeenCalledWith("CreateWallet");
   });
 
   it("shows an error message when loading fails", async () => {
-    const list = jest.fn().mockRejectedValue(new Error("gateway unreachable"));
+    const list = jest
+      .fn()
+      .mockRejectedValue(new ZumaApiError("Unable to reach the zuma gateway", { code: "NETWORK_ERROR" }));
     mockedUseZuma.mockReturnValue({ wallets: { list }, transactions: {} } as any);
 
     const { getByText } = render(
       <WalletListScreen navigation={makeNavigation()} route={{ key: "x", name: "WalletList" }} />
     );
 
-    await waitFor(() => expect(getByText("gateway unreachable")).toBeTruthy());
+    await waitFor(() => expect(getByText(/Can't reach the server/)).toBeTruthy());
   });
 });

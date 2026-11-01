@@ -1,0 +1,29 @@
+# Default-deny for the gnee namespace; only the ingress controller may reach web-spa on 8080.
+# web-spa serves static files and needs no egress at all (the browser, not nginx, calls the
+# gateway/IdP). Ingress controller namespace assumed "ingress-nginx" — adjust to your controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: gnee
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-spa-allow-ingress-controller
+  namespace: gnee
+spec:
+  podSelector:
+    matchLabels:
+      app: web-spa
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - { protocol: TCP, port: 8080 }

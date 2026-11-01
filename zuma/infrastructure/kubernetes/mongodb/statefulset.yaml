@@ -1,4 +1,5 @@
 # Dev/self-hosted Mongo only — production should use a managed service (e.g. MongoDB Atlas) instead.
+# Auth enabled via mongodb-secret (root user created on first start of an empty volume).
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -17,12 +18,42 @@ spec:
       labels:
         app: mongodb
     spec:
+      automountServiceAccountToken: false
+      # The official image's mongodb user is uid/gid 999
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: mongodb
-          image: mongo:7
+          # TODO: pin by digest (docker buildx imagetools inspect mongo:7.0.14)
+          image: mongo:7.0.14
           ports:
             - containerPort: 27017
               name: mongo
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_INITDB_ROOT_PASSWORD
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 999
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: "250m"
@@ -33,16 +64,29 @@ spec:
           volumeMounts:
             - name: mongo-data
               mountPath: /data/db
+            - name: configdb
+              mountPath: /data/configdb
+            - name: tmp
+              mountPath: /tmp
+          # ping needs no auth, so no credentials appear in probe args
           readinessProbe:
             exec:
               command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             exec:
               command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-            initialDelaySeconds: 20
+            initialDelaySeconds: 30
             periodSeconds: 20
+            timeoutSeconds: 5
+      volumes:
+        - name: configdb
+          emptyDir: {}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
   volumeClaimTemplates:
     - metadata:
         name: mongo-data

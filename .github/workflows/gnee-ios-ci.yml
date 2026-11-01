@@ -1,5 +1,9 @@
 name: gnee-ios-ci
 
+# TODO: pin actions to full commit SHAs (e.g. via pinact / dependabot).
+# actions/checkout and actions/setup-node are already SHA-pinned; every other `uses:` below is
+# pinned to a version tag only.
+
 on:
   push:
     branches: [main]
@@ -7,16 +11,26 @@ on:
       - "gnee/apps/ios/**"
       - "gnee/packages/**"
       - "gnee/package.json"
+      - "gnee/package-lock.json"
+      - "gnee/biome.json"
+      - ".github/workflows/gnee-ios-ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "gnee/apps/ios/**"
       - "gnee/packages/**"
       - "gnee/package.json"
+      - "gnee/package-lock.json"
+      - "gnee/biome.json"
+      - ".github/workflows/gnee-ios-ci.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -27,6 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -39,6 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -51,6 +69,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -67,6 +87,8 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -88,6 +110,8 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22

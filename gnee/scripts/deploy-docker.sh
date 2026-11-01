@@ -1,34 +1,38 @@
 #!/usr/bin/env bash
-# Builds and runs gnee/web-spa as a single local container (plain `docker run`,
-# not swarm/stack). Nothing baked into the image is secret (public OIDC SPA
-# client — see infrastructure/docker/web-spa.Dockerfile) but config values
-# still come from 1Password when available, so the same op:// references in
-# env.example stay the single source of truth across docker/swarm/k8s.
+# Builds and runs gnee/web-spa as a single LOCAL container (plain `docker run`, not swarm/stack)
+# on http://localhost:8080 — localhost counts as a secure context, so OIDC PKCE works without TLS.
+# Nothing baked into the image is secret (public OIDC SPA client — see
+# infrastructure/docker/web-spa.Dockerfile). Values come from env vars first, then 1Password;
+# a failed or empty `op read` aborts the script.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# shellcheck source=lib/common.sh
+source scripts/lib/common.sh
 
-op_or_default() {
-  local ref="$1" fallback="$2"
-  op read "$ref" 2>/dev/null || echo "$fallback"
-}
-
-VITE_ZUMA_GATEWAY_URL="${VITE_ZUMA_GATEWAY_URL:-$(op_or_default "op://zuma/web-spa-oidc/gateway_url" "http://localhost:3003/graphql")}"
-VITE_OIDC_AUTHORITY="${VITE_OIDC_AUTHORITY:-$(op_or_default "op://zuma/web-spa-oidc/authority" "")}"
-VITE_OIDC_CLIENT_ID="${VITE_OIDC_CLIENT_ID:-$(op_or_default "op://zuma/web-spa-oidc/client_id" "")}"
+# Local-only default: the zuma compose stack's gateway (scripts/dev-up.sh --full)
+VITE_ZUMA_GATEWAY_URL="${VITE_ZUMA_GATEWAY_URL:-http://localhost:3003/graphql}"
 VITE_OIDC_REDIRECT_URI="${VITE_OIDC_REDIRECT_URI:-http://localhost:8080/callback}"
+resolve_oidc_config
+
 IMAGE_TAG="${IMAGE_TAG:-gnee/web-spa:local}"
+CONTAINER_NAME="gnee-web-spa"
 
-docker build \
-  -f infrastructure/docker/web-spa.Dockerfile \
-  --build-arg VITE_ZUMA_GATEWAY_URL="$VITE_ZUMA_GATEWAY_URL" \
-  --build-arg VITE_OIDC_AUTHORITY="$VITE_OIDC_AUTHORITY" \
-  --build-arg VITE_OIDC_CLIENT_ID="$VITE_OIDC_CLIENT_ID" \
-  --build-arg VITE_OIDC_REDIRECT_URI="$VITE_OIDC_REDIRECT_URI" \
-  -t "$IMAGE_TAG" \
-  .
+ZUMA_GATEWAY_ORIGIN="$(url_origin "$VITE_ZUMA_GATEWAY_URL")"
+OIDC_AUTHORITY_ORIGIN="$(url_origin "$VITE_OIDC_AUTHORITY")"
 
-docker rm -f gnee-web-spa >/dev/null 2>&1 || true
-docker run --rm -d --name gnee-web-spa -p 8080:8080 "$IMAGE_TAG"
+build_web_spa_image "$IMAGE_TAG"
+
+if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+  docker rm -f "$CONTAINER_NAME" >/dev/null
+fi
+docker run --rm -d \
+  --name "$CONTAINER_NAME" \
+  -p 127.0.0.1:8080:8080 \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  -e ZUMA_GATEWAY_ORIGIN="$ZUMA_GATEWAY_ORIGIN" \
+  -e OIDC_AUTHORITY_ORIGIN="$OIDC_AUTHORITY_ORIGIN" \
+  "$IMAGE_TAG" >/dev/null
 
 echo "gnee-web-spa running: http://localhost:8080"

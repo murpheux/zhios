@@ -4,13 +4,16 @@ export type WalletType = 'hot' | 'cold' | 'custodial' | 'non-custodial';
 
 export type WalletStatus = 'active' | 'suspended' | 'archived';
 
+import type { SatsAmount } from './transaction.dto';
+
 export interface WalletDto {
   id: string;
   label: string;
   address: string;
   network: SupportedBitcoinNetwork;
   type: WalletType;
-  balanceCache: string;
+  /** Integer satoshis as a string. */
+  balanceCache: SatsAmount;
   metadata: Record<string, unknown>;
   ownerUserId: string;
   status: WalletStatus;

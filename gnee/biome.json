@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/coverage",
+      "!**/node_modules",
+      "!**/.expo",
+      "!apps/*/ios",
+      "!apps/*/android",
+      "!**/playwright-report",
+      "!**/test-results"
+    ]
+  },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": {
+    "enabled": true,
+    "domains": { "react": "recommended" },
+    "rules": {
+      "preset": "recommended",
+      "suspicious": { "noExplicitAny": "off" },
+      "style": { "useImportType": "off", "noNonNullAssertion": "warn" },
+      "correctness": { "noUnusedVariables": "warn", "noUnusedImports": "warn" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/spa/e2e/**"],
+      "linter": {
+        "rules": {
+          "correctness": { "noComponentHookFactories": "off" }
+        }
+      }
+    }
+  ]
+}

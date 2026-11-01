@@ -1,12 +1,29 @@
 {
   "files": [],
   "references": [
-    { "path": "shared/common" },
-    { "path": "shared/config" },
-    { "path": "shared/logging" },
-    { "path": "shared/observability" },
-    { "path": "services/wallet-service" },
-    { "path": "services/transaction-service" },
-    { "path": "graphql" }
+    {
+      "path": "shared/common"
+    },
+    {
+      "path": "shared/config"
+    },
+    {
+      "path": "shared/logging"
+    },
+    {
+      "path": "shared/observability"
+    },
+    {
+      "path": "shared/http"
+    },
+    {
+      "path": "services/wallet-service"
+    },
+    {
+      "path": "services/transaction-service"
+    },
+    {
+      "path": "graphql"
+    }
   ]
 }

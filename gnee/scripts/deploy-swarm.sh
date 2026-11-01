@@ -1,39 +1,41 @@
 #!/usr/bin/env bash
-# Builds gnee/web-spa, pushes it to a registry reachable by every swarm node,
-# then deploys/updates the stack. Per CLAUDE.md, prefer the scarlet-daemon
-# docker context over raw SSH when targeting the swarm manager:
+# Builds gnee/web-spa, pushes it to a registry reachable by every swarm node, then deploys/updates
+# the stack (web-spa behind a Caddy TLS proxy — see infrastructure/docker/web-spa-stack.yml).
+# Per CLAUDE.md, prefer the scarlet-daemon docker context over raw SSH:
 #   docker context use scarlet-daemon && ./scripts/deploy-swarm.sh
+#
+# Required: REGISTRY, SITE_ADDRESS (public hostname). Gateway URL and OIDC settings come from env
+# vars or 1Password; a failed or empty `op read` aborts. No localhost defaults for remote deploys.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# shellcheck source=lib/common.sh
+source scripts/lib/common.sh
 
-op_or_default() {
-  local ref="$1" fallback="$2"
-  op read "$ref" 2>/dev/null || echo "$fallback"
-}
-
-REGISTRY="${REGISTRY:?set REGISTRY, e.g. scarlet:5000 — swarm workers pull from it, not the manager's local build cache}"
-IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
+REGISTRY="${REGISTRY:?set REGISTRY, e.g. scarlet:5000 — swarm workers pull from it, not the manager local build cache}"
+SITE_ADDRESS="${SITE_ADDRESS:?set SITE_ADDRESS to the public hostname served over HTTPS, e.g. wallet.example.com}"
 STACK_NAME="${STACK_NAME:-gnee}"
+if [[ -z "${IMAGE_TAG:-}" ]]; then
+  IMAGE_TAG="$(git rev-parse --short HEAD)"
+fi
 
-VITE_ZUMA_GATEWAY_URL="${VITE_ZUMA_GATEWAY_URL:-$(op_or_default "op://zuma/web-spa-oidc/gateway_url" "http://localhost:3003/graphql")}"
-VITE_OIDC_AUTHORITY="${VITE_OIDC_AUTHORITY:-$(op_or_default "op://zuma/web-spa-oidc/authority" "")}"
-VITE_OIDC_CLIENT_ID="${VITE_OIDC_CLIENT_ID:-$(op_or_default "op://zuma/web-spa-oidc/client_id" "")}"
-VITE_OIDC_REDIRECT_URI="${VITE_OIDC_REDIRECT_URI:?set VITE_OIDC_REDIRECT_URI to this deploy's public /callback URL}"
+VITE_ZUMA_GATEWAY_URL="$(config_value VITE_ZUMA_GATEWAY_URL "op://zuma/web-spa-oidc/gateway_url")"
+require_remote_https_url VITE_ZUMA_GATEWAY_URL "$VITE_ZUMA_GATEWAY_URL"
+VITE_OIDC_REDIRECT_URI="${VITE_OIDC_REDIRECT_URI:-https://${SITE_ADDRESS}/callback}"
+require_remote_https_url VITE_OIDC_REDIRECT_URI "$VITE_OIDC_REDIRECT_URI"
+resolve_oidc_config
+require_remote_https_url VITE_OIDC_AUTHORITY "$VITE_OIDC_AUTHORITY"
 
-docker build \
-  -f infrastructure/docker/web-spa.Dockerfile \
-  --build-arg VITE_ZUMA_GATEWAY_URL="$VITE_ZUMA_GATEWAY_URL" \
-  --build-arg VITE_OIDC_AUTHORITY="$VITE_OIDC_AUTHORITY" \
-  --build-arg VITE_OIDC_CLIENT_ID="$VITE_OIDC_CLIENT_ID" \
-  --build-arg VITE_OIDC_REDIRECT_URI="$VITE_OIDC_REDIRECT_URI" \
-  -t "${REGISTRY}/gnee/web-spa:${IMAGE_TAG}" \
-  .
+ZUMA_GATEWAY_ORIGIN="$(url_origin "$VITE_ZUMA_GATEWAY_URL")"
+OIDC_AUTHORITY_ORIGIN="$(url_origin "$VITE_OIDC_AUTHORITY")"
+IMAGE="${REGISTRY}/gnee/web-spa:${IMAGE_TAG}"
 
-docker push "${REGISTRY}/gnee/web-spa:${IMAGE_TAG}"
+build_web_spa_image "$IMAGE"
+docker push "$IMAGE"
 
-REGISTRY="$REGISTRY" IMAGE_TAG="$IMAGE_TAG" \
-  docker stack deploy -c infrastructure/docker/web-spa-stack.yml "$STACK_NAME"
+REGISTRY="$REGISTRY" IMAGE_TAG="$IMAGE_TAG" SITE_ADDRESS="$SITE_ADDRESS" \
+  ZUMA_GATEWAY_ORIGIN="$ZUMA_GATEWAY_ORIGIN" OIDC_AUTHORITY_ORIGIN="$OIDC_AUTHORITY_ORIGIN" \
+  docker stack deploy --with-registry-auth -c infrastructure/docker/web-spa-stack.yml "$STACK_NAME"
 
-echo "Deployed ${REGISTRY}/gnee/web-spa:${IMAGE_TAG} to swarm stack '${STACK_NAME}'."
+echo "Deployed ${IMAGE} to swarm stack '${STACK_NAME}' at https://${SITE_ADDRESS}"
 echo "Check rollout: docker stack services ${STACK_NAME}"

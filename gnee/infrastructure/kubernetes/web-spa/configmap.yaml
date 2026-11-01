@@ -1,0 +1,10 @@
+# Non-secret runtime config: origins (scheme://host[:port], no path) allowed in the CSP
+# connect-src. Must match the VITE_ZUMA_GATEWAY_URL / VITE_OIDC_AUTHORITY baked into the image.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-spa-config
+  namespace: gnee
+data:
+  ZUMA_GATEWAY_ORIGIN: "https://api.wallet.example.com"
+  OIDC_AUTHORITY_ORIGIN: "https://idp.example.com"

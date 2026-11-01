@@ -1,15 +1,10 @@
-import { ErrorWithProps } from 'mercurius';
-import type { CreateTransactionDto, TransactionDto } from '@zuma/shared-common';
+import { SATS_AMOUNT_PATTERN, type CreateTransactionDto, type TransactionStatus } from '@zuma/shared-common';
 import type { GatewayContext } from '../context';
-import { UpstreamHttpError } from '../clients/upstream-http-error';
+import { badUserInput, toGraphqlError } from './errors';
+import { fromGraphqlEnum, toConnection, toGraphqlTransaction, type GraphqlTransaction } from './mappers';
 
-// Re-throws upstream REST failures as GraphQL errors carrying the original status/code.
-const toGraphqlError = (error: unknown): never => {
-  if (error instanceof UpstreamHttpError) {
-    throw new ErrorWithProps(error.message, { code: error.code, statusCode: error.statusCode });
-  }
-  throw error;
-};
+const SATS_AMOUNT = new RegExp(SATS_AMOUNT_PATTERN);
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,128}$/;
 
 export interface TransactionArgs {
   id: string;
@@ -17,6 +12,7 @@ export interface TransactionArgs {
 
 export interface TransactionsArgs {
   walletId?: string;
+  /** GraphQL TransactionStatus enum value, e.g. 'PENDING'. */
   status?: string;
   from?: string;
   to?: string;
@@ -25,7 +21,13 @@ export interface TransactionsArgs {
 }
 
 export interface CreateTransactionArgs {
-  input: CreateTransactionDto;
+  input: {
+    walletId: string;
+    amount: string;
+    feeRate: string;
+    destinationAddress: string;
+    idempotencyKey: string;
+  };
 }
 
 export const transactionResolvers = {
@@ -34,29 +36,25 @@ export const transactionResolvers = {
       _parent: unknown,
       args: TransactionArgs,
       ctx: GatewayContext,
-    ): Promise<TransactionDto> => {
+    ): Promise<GraphqlTransaction> => {
       try {
-        return await ctx.transactionServiceClient.getTransaction(args.id, ctx.authorization);
+        return toGraphqlTransaction(
+          await ctx.transactionServiceClient.getTransaction(args.id, ctx.authorization),
+        );
       } catch (error) {
         return toGraphqlError(error);
       }
     },
-    transactions: async (
-      _parent: unknown,
-      args: TransactionsArgs,
-      ctx: GatewayContext,
-    ) => {
+    transactions: async (_parent: unknown, args: TransactionsArgs, ctx: GatewayContext) => {
       try {
-        const result = await ctx.transactionServiceClient.listTransactions(args, ctx.authorization);
-        return {
-          items: result.items,
-          pageInfo: {
-            total: result.total,
-            page: result.page,
-            limit: result.limit,
-            totalPages: result.totalPages,
+        const result = await ctx.transactionServiceClient.listTransactions(
+          {
+            ...args,
+            status: args.status ? fromGraphqlEnum<TransactionStatus>(args.status) : undefined,
           },
-        };
+          ctx.authorization,
+        );
+        return toConnection(result, toGraphqlTransaction);
       } catch (error) {
         return toGraphqlError(error);
       }
@@ -67,9 +65,24 @@ export const transactionResolvers = {
       _parent: unknown,
       args: CreateTransactionArgs,
       ctx: GatewayContext,
-    ): Promise<TransactionDto> => {
+    ): Promise<GraphqlTransaction> => {
+      const { idempotencyKey, ...rest } = args.input;
+      if (!IDEMPOTENCY_KEY.test(idempotencyKey)) {
+        throw badUserInput('idempotencyKey must be 8-128 characters of [A-Za-z0-9_-]');
+      }
+      if (!SATS_AMOUNT.test(rest.amount)) {
+        throw badUserInput('amount must be a positive integer number of satoshis, as a string');
+      }
       try {
-        return await ctx.transactionServiceClient.createTransaction(args.input, ctx.authorization);
+        // Only outgoing sends can be created through the public API.
+        const input: CreateTransactionDto = { ...rest, type: 'send' };
+        return toGraphqlTransaction(
+          await ctx.transactionServiceClient.createTransaction(
+            input,
+            idempotencyKey,
+            ctx.authorization,
+          ),
+        );
       } catch (error) {
         return toGraphqlError(error);
       }

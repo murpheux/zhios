@@ -2,7 +2,7 @@ import { NotFoundError, ValidationError, isPrivileged, type Actor } from '@zuma/
 import type { TransactionEntity } from '../../domain/entities/transaction.entity';
 import type { TransactionRepositoryPort } from '../ports/transaction-repository.port';
 
-// Validates a pending transaction is well-formed before it is broadcast (e.g. has a signed rawTx).
+// Read-only check that a pending transaction is ready to broadcast (signed rawTx + funds debited).
 export class ValidateTransactionUseCase {
   constructor(private readonly transactionRepository: TransactionRepositoryPort) {}
 
@@ -11,9 +11,10 @@ export class ValidateTransactionUseCase {
     if (!transaction || (transaction.ownerUserId !== actor.sub && !isPrivileged(actor))) {
       throw new NotFoundError('Transaction', id);
     }
-    if (transaction.status !== 'pending' || !transaction.rawTx) {
+    if (transaction.status !== 'pending' || !transaction.rawTx || !transaction.debitedAt) {
       throw new ValidationError('Transaction is not in a valid state to be validated', {
         status: transaction.status,
+        fundsReserved: transaction.debitedAt !== null,
       });
     }
     return transaction;

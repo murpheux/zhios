@@ -1,11 +1,12 @@
 import type { PaginatedResult, PaginationQuery } from '@zuma/shared-common';
 import { toPaginatedResult } from '@zuma/shared-common';
-import type { HydratedDocument } from 'mongoose';
+import { isValidObjectId, type HydratedDocument } from 'mongoose';
 import type { NewTransactionProps, TransactionEntity } from '../../domain/entities/transaction.entity';
-import type {
-  TransactionFilter,
-  TransactionRepositoryPort,
-  TransactionUpdate,
+import {
+  DuplicateIdempotencyKeyError,
+  type TransactionFilter,
+  type TransactionRepositoryPort,
+  type TransactionUpdate,
 } from '../../application/ports/transaction-repository.port';
 import { TransactionModel } from './mongoose/transaction.model';
 import type { TransactionDocumentShape } from './mongoose/transaction.schema';
@@ -19,30 +20,43 @@ const toEntity = (doc: HydratedDocument<TransactionDocumentShape>): TransactionE
   type: doc.type,
   amount: doc.amount,
   feeRate: doc.feeRate,
+  feeSats: doc.feeSats ?? '0',
+  destinationAddress: doc.destinationAddress,
   status: doc.status,
+  failureReason: doc.failureReason ?? null,
   confirmations: doc.confirmations,
   rawTx: doc.rawTx,
+  debitedAt: doc.debitedAt ?? null,
+  refundedAt: doc.refundedAt ?? null,
   broadcastAt: doc.broadcastAt,
   createdAt: doc.createdAt,
   updatedAt: doc.updatedAt,
 });
 
+const isDuplicateKeyError = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 11000;
+
 export class MongooseTransactionRepository implements TransactionRepositoryPort {
   async create(props: NewTransactionProps): Promise<TransactionEntity> {
-    const doc = await TransactionModel.create({
-      walletId: props.walletId,
-      ownerUserId: props.ownerUserId,
-      idempotencyKey: props.idempotencyKey ?? null,
-      type: props.type,
-      amount: props.amount,
-      feeRate: props.feeRate,
-      txid: null,
-      rawTx: null,
-      status: 'pending',
-      confirmations: 0,
-      broadcastAt: null,
-    });
-    return toEntity(doc);
+    try {
+      // One insert carrying rawTx + destination: there is no window where a pending tx lacks its payload.
+      const doc = await TransactionModel.create({
+        ...props,
+        txid: null,
+        status: 'pending',
+        failureReason: null,
+        confirmations: 0,
+        debitedAt: null,
+        refundedAt: null,
+        broadcastAt: null,
+      });
+      return toEntity(doc);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        throw new DuplicateIdempotencyKeyError(props.ownerUserId, props.idempotencyKey);
+      }
+      throw error;
+    }
   }
 
   async findByIdempotencyKey(ownerUserId: string, idempotencyKey: string): Promise<TransactionEntity | null> {
@@ -51,6 +65,9 @@ export class MongooseTransactionRepository implements TransactionRepositoryPort 
   }
 
   async findById(id: string): Promise<TransactionEntity | null> {
+    if (!isValidObjectId(id)) {
+      return null;
+    }
     const doc = await TransactionModel.findById(id);
     return doc ? toEntity(doc) : null;
   }
@@ -85,22 +102,16 @@ export class MongooseTransactionRepository implements TransactionRepositoryPort 
     return toPaginatedResult(docs.map(toEntity), total, pagination);
   }
 
-  async update(id: string, changes: TransactionUpdate): Promise<TransactionEntity | null> {
-    const doc = await TransactionModel.findByIdAndUpdate(
-      id,
-      { $set: changes },
-      { new: true, runValidators: true },
-    );
-    return doc ? toEntity(doc) : null;
-  }
-
   // Atomic compare-and-swap: only applies the update if the document is still in `fromStatus`.
-  // Returns null when another request already moved it out of that state (the race F3 exploited).
+  // Returns null when another request already moved it out of that state.
   async transition(
     id: string,
     fromStatus: TransactionDocumentShape['status'],
     changes: TransactionUpdate,
   ): Promise<TransactionEntity | null> {
+    if (!isValidObjectId(id)) {
+      return null;
+    }
     const doc = await TransactionModel.findOneAndUpdate(
       { _id: id, status: fromStatus },
       { $set: changes },

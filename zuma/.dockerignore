@@ -1,3 +1,4 @@
+# Keep the build context minimal and secret-free (context = zuma/ root).
 node_modules
 **/node_modules
 dist
@@ -5,10 +6,24 @@ dist
 coverage
 **/coverage
 *.tsbuildinfo
+**/*.tsbuildinfo
 .git
+.github
+# Never ship env files (including .env.example — the images don't need it)
 .env
-.env.*.local
+.env.*
+**/.env
+**/.env.*
 *.log
 .vscode
 .idea
+.devcontainer
+**/.devcontainer
 infrastructure
+scripts
+docs
+**/tests
+**/*.test.ts
+*.md
+**/*.md
+docker-compose*.yml

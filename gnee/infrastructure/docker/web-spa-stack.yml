@@ -1,15 +1,22 @@
-# Swarm-mode stack file — deploy with:
-#   docker stack deploy -c infrastructure/docker/web-spa-stack.yml gnee
-# Unlike `docker build` on a single host, swarm workers pull `image:` from a
-# registry — they never see the manager's local build cache. Push first (see
-# scripts/deploy-swarm.sh), then deploy.
+# Swarm-mode stack file — deploy with (scripts/deploy-swarm.sh sets these):
+#   REGISTRY=scarlet:5000 IMAGE_TAG=<git-sha> SITE_ADDRESS=wallet.example.com \
+#   ZUMA_GATEWAY_ORIGIN=https://api.wallet.example.com OIDC_AUTHORITY_ORIGIN=https://idp.example.com \
+#     docker stack deploy -c infrastructure/docker/web-spa-stack.yml gnee
+# Swarm workers pull `image:` from a registry — they never see the manager's local build cache.
+#
+# TLS: OIDC Authorization Code + PKCE needs a secure context (crypto.subtle), so the SPA must be
+# served over HTTPS. Caddy terminates TLS in front of web-spa using the static Caddyfile below
+# (no Docker socket mount, unlike label-driven proxies). web-spa itself publishes no ports.
 services:
   web-spa:
-    image: ${REGISTRY:?set REGISTRY, e.g. scarlet:5000}/gnee/web-spa:${IMAGE_TAG:-latest}
-    ports:
-      - "8080:8080"
+    image: ${REGISTRY:?set REGISTRY, e.g. scarlet:5000}/gnee/web-spa:${IMAGE_TAG:?set IMAGE_TAG to an explicit version}
+    environment:
+      ZUMA_GATEWAY_ORIGIN: ${ZUMA_GATEWAY_ORIGIN:?set ZUMA_GATEWAY_ORIGIN, e.g. https://api.wallet.example.com}
+      OIDC_AUTHORITY_ORIGIN: ${OIDC_AUTHORITY_ORIGIN:?set OIDC_AUTHORITY_ORIGIN, e.g. https://idp.example.com}
     networks:
       - gnee-net
+    cap_drop:
+      - ALL
     deploy:
       replicas: 2
       restart_policy:
@@ -17,6 +24,7 @@ services:
       update_config:
         order: start-first
         parallelism: 1
+        failure_action: rollback
       resources:
         limits:
           cpus: "0.25"
@@ -24,6 +32,56 @@ services:
         reservations:
           cpus: "0.05"
           memory: 32M
+
+  tls-proxy:
+    # TODO: pin by digest (docker buildx imagetools inspect caddy:2.8.4-alpine)
+    image: caddy:2.8.4-alpine
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to the public hostname, e.g. wallet.example.com}
+    ports:
+      - target: 443
+        published: 443
+        protocol: tcp
+      - target: 80
+        published: 80
+        protocol: tcp
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      # Caddy's issued certs / internal CA — node-local, hence the manager placement constraint
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - gnee-net
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+
+configs:
+  caddyfile:
+    # Swarm configs are immutable: bump CADDYFILE_VERSION whenever Caddyfile changes
+    name: gnee_caddyfile_${CADDYFILE_VERSION:-v1}
+    file: ./Caddyfile
+
+volumes:
+  caddy-data:
+  caddy-config:
 
 networks:
   gnee-net:

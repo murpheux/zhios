@@ -10,7 +10,7 @@ describe('CreateWalletUseCase', () => {
     address: 'tb1qmockaddress',
     network: 'testnet',
     type: 'hot',
-    balanceCache: '0',
+    balanceSats: 0,
     metadata: {},
     ownerUserId: 'user-1',
     status: 'active',
@@ -26,6 +26,8 @@ describe('CreateWalletUseCase', () => {
       findById: jest.fn(),
       findMany: jest.fn(),
       updateMetadata: jest.fn(),
+      applyBalanceMovement: jest.fn(),
+      clearPendingMovement: jest.fn(),
     };
     const addressGenerator: jest.Mocked<AddressGeneratorPort> = {
       generate: jest.fn().mockResolvedValue('tb1qmockaddress'),

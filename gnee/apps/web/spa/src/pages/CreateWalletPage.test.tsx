@@ -1,7 +1,7 @@
-import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { ZumaApiError } from "@gnee/api-client";
 import { CreateWalletPage } from "./CreateWalletPage";
 import { useZuma } from "../ZumaProvider";
 
@@ -25,17 +25,32 @@ describe("CreateWalletPage", () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText("Primary hot wallet"), { target: { value: "My wallet" } });
-    fireEvent.change(screen.getByPlaceholderText("user-123"), { target: { value: "user-456" } });
+    fireEvent.change(screen.getByLabelText("Network"), { target: { value: "REGTEST" } });
     fireEvent.click(screen.getByText("Create wallet"));
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({
         label: "My wallet",
-        ownerUserId: "user-456",
-        network: "testnet",
-        type: "hot",
+        network: "REGTEST",
+        type: "HOT",
       })
     );
     expect(navigateMock).toHaveBeenCalledWith("/wallets/wallet-9");
+    expect(screen.queryByText(/Owner user id/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the mapped error message when creation fails", async () => {
+    const create = vi.fn().mockRejectedValue(new ZumaApiError("Forbidden", { code: "FORBIDDEN" }));
+    vi.mocked(useZuma).mockReturnValue({ wallets: { create }, transactions: {} } as any);
+
+    render(
+      <MemoryRouter>
+        <CreateWalletPage />
+      </MemoryRouter>
+    );
+    fireEvent.change(screen.getByPlaceholderText("Primary hot wallet"), { target: { value: "My wallet" } });
+    fireEvent.click(screen.getByText("Create wallet"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("You don't have permission to use this wallet.");
   });
 });

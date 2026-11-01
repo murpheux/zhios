@@ -2,16 +2,20 @@ import { randomBytes } from 'node:crypto';
 import type {
   BitcoinNodeClientPort,
   BuildTransactionInput,
+  BuiltTransaction,
   SignedTransaction,
 } from '../../application/ports/bitcoin-node-client.port';
+
+// Typical 1-input/2-output P2WPKH transaction size, used to turn a sat/vB rate into a fee.
+const MOCK_TX_VSIZE_VB = 141;
 
 // MOCK Bitcoin node client for local/test use only.
 // Production must integrate a real Bitcoin Core RPC / custody provider with HSM/KMS-backed signing — no real key material here.
 export class MockBitcoinNodeClient implements BitcoinNodeClientPort {
-  async build(input: BuildTransactionInput): Promise<SignedTransaction> {
-    // Fakes a raw unsigned tx hex; a real impl would select UTXOs and construct a PSBT.
-    const rawTx = `rawtx:${input.walletId}:${input.amount}:${randomBytes(8).toString('hex')}`;
-    return { rawTx };
+  async build(input: BuildTransactionInput): Promise<BuiltTransaction> {
+    // Fakes a raw unsigned tx; a real impl would select UTXOs and construct a PSBT.
+    const rawTx = `rawtx:${input.walletId}:${input.amountSats}:${randomBytes(8).toString('hex')}`;
+    return { rawTx, feeSats: input.feeRate * MOCK_TX_VSIZE_VB };
   }
 
   async sign(rawTx: string): Promise<SignedTransaction> {

@@ -7,24 +7,26 @@
     "build": "tsc -b tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "test": "jest --passWithNoTests"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --passWithNoTests",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --testPathIgnorePatterns repository --json --outputFile=coverage/test-results.json"
   },
   "dependencies": {
     "@zuma/shared-common": "^0.1.0",
     "@zuma/shared-config": "^0.1.0",
+    "@zuma/shared-http": "^0.1.0",
     "@zuma/shared-logging": "^0.1.0",
     "@zuma/shared-observability": "^0.1.0",
     "fastify": "^5.0.0",
-    "mercurius": "^14.1.0",
     "graphql": "^16.9.0",
+    "mercurius": "^16.12.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "typescript": "^5.6.3",
-    "tsx": "^4.19.1",
+    "@types/jest": "^29.5.13",
+    "@types/node": "^22.7.5",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.5",
-    "@types/jest": "^29.5.13",
-    "@types/node": "^22.7.5"
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
   }
 }

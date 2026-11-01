@@ -1,4 +1,3 @@
-import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { WalletListScreen } from "./screens/WalletListScreen";
@@ -8,7 +7,8 @@ import { SendTransactionScreen } from "./screens/SendTransactionScreen";
 
 export type RootStackParamList = {
   WalletList: undefined;
-  WalletDetail: { walletId: string };
+  /** sentTransactionId is set when returning from a successful send. */
+  WalletDetail: { walletId: string; sentTransactionId?: string };
   CreateWallet: undefined;
   SendTransaction: { walletId: string };
 };

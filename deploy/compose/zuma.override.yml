@@ -1,0 +1,71 @@
+# Merged over zuma/docker-compose.yml by the root docker-compose.yml (`include.path` list), so
+# zuma's own compose file stays usable on its own (`cd zuma && ./scripts/dev-up.sh --full`).
+#
+# Differences from the standalone zuma stack:
+#   - secrets come from the ROOT .env (interpolated below) instead of zuma/.env
+#   - user tokens are verified via the local mock OIDC provider's JWKS (RS256), not HS256
+#   - zuma-net becomes internal (no egress, Mongo unreachable from the host); services that
+#     publish ports also join the `edge` network
+#   - images are tagged zhios/<service>:<tag> so Terraform (build_images=false) can reuse them
+#
+# Issuer split (the classic mismatch): the browser and Postman reach the IdP at
+# http://localhost:8090, so tokens carry iss=http://localhost:8090/zuma. Containers can't use
+# localhost for that, so they fetch the JWKS by service name (mock-oidc:8080). JWT_ISSUER MUST
+# stay the browser-visible URL; only JWT_JWKS_URI uses the in-network name.
+
+x-zhios-secrets: &zhios-secrets
+  JWT_SECRET: ${JWT_SECRET:?run make secrets-local or make secrets-op to create the root .env}
+  INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:?run make secrets-local or make secrets-op to create the root .env}
+  METRICS_TOKEN: ${METRICS_TOKEN:?run make secrets-local or make secrets-op to create the root .env}
+
+x-zhios-oidc: &zhios-oidc
+  JWT_ISSUER: ${OIDC_ISSUER:-http://localhost:8090/zuma}
+  JWT_JWKS_URI: ${JWT_JWKS_URI:-http://mock-oidc:8080/zuma/jwks}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-zuma-api}
+  JWT_ALGORITHMS: RS256
+
+services:
+  mongo:
+    # Not published: only reachable on the internal network (use zuma's own compose for a
+    # host-reachable Mongo during `npm run dev`).
+    ports: !reset []
+
+  wallet-service:
+    image: ${IMAGE_PREFIX:-zhios}/wallet-service:${IMAGE_TAG:-local}
+    env_file: !reset []
+    networks:
+      - zuma-net
+      - edge
+    environment:
+      <<: [*zhios-secrets, *zhios-oidc]
+
+  transaction-service:
+    image: ${IMAGE_PREFIX:-zhios}/transaction-service:${IMAGE_TAG:-local}
+    env_file: !reset []
+    networks:
+      - zuma-net
+      - edge
+    environment:
+      <<: [*zhios-secrets, *zhios-oidc]
+      # Local only: dev-mode config + mock chain client (rejected under NODE_ENV=production)
+      NODE_ENV: development
+      BITCOIN_ADAPTER: mock
+
+  graphql-gateway:
+    image: ${IMAGE_PREFIX:-zhios}/graphql-gateway:${IMAGE_TAG:-local}
+    env_file: !reset []
+    networks:
+      - zuma-net
+      - edge
+    environment:
+      <<: [*zhios-secrets, *zhios-oidc]
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173}
+
+networks:
+  zuma-net:
+    driver: bridge
+    internal: true
+  # Non-internal bridge for containers that publish ports on 127.0.0.1 (also used by mock-oidc,
+  # defined in the root docker-compose.yml).
+  edge:
+    driver: bridge

@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -b tsconfig.json",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage --testPathIgnorePatterns repository --json --outputFile=coverage/test-results.json"
   },
   "dependencies": {
     "zod": "^3.23.8"

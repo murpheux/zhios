@@ -1,0 +1,65 @@
+# zhios local stack (docker compose = ALTERNATIVE / test path; Terraform in
+# infrastructure/terraform/docker is the default deploy path and builds the same topology).
+#
+#   make secrets-local        # or: make secrets-op (1Password) -> git-ignored root .env
+#   make compose-up           # docker compose up -d --build --wait
+#   make compose-test         # scripts/compose-smoke-test.sh
+#
+# Services (all published on 127.0.0.1 only):
+#   web-spa              http://localhost:8080   gnee/infrastructure/docker/web-spa-compose.yml
+#   graphql-gateway      http://localhost:3003   zuma/docker-compose.yml + deploy/compose/zuma.override.yml
+#   wallet-service       http://localhost:3001
+#   transaction-service  http://localhost:3002
+#   mock-oidc            http://localhost:8090   (issuer http://localhost:8090/zuma)
+#   mongo                internal network only
+#
+# Secrets: only from the root .env (or $ZHIOS_ENV_FILE), interpolated into the zuma services.
+# Never run `docker compose config` without -q here: it prints the interpolated secrets.
+
+name: zhios
+
+include:
+  - path:
+      - zuma/docker-compose.yml
+      - deploy/compose/zuma.override.yml
+    env_file: ${ZHIOS_ENV_FILE:-.env}
+  - path: gnee/infrastructure/docker/web-spa-compose.yml
+    env_file: ${ZHIOS_ENV_FILE:-.env}
+
+services:
+  # Local dev OIDC provider (deploy/mock-oidc/server.mjs — Node stdlib, tested by
+  # deploy/mock-oidc/server.test.mjs): Authorization Code + PKCE for the SPA, client_credentials
+  # personas for Postman/smoke tests, RS256 + JWKS. DEV ONLY: it signs a token for any username.
+  # Personas (scope -> sub/roles) live in deploy/mock-oidc/config.json, baked into the image.
+  mock-oidc:
+    image: zhios/mock-oidc:local
+    build:
+      context: deploy/mock-oidc
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Fixed issuer (not derived from the Host header): must equal zuma's JWT_ISSUER.
+      ISSUER: ${OIDC_ISSUER:-http://localhost:8090/zuma}
+      ALLOWED_REDIRECT_URIS: http://localhost:${WEB_PORT:-8080}/callback
+      ALLOWED_POST_LOGOUT_REDIRECT_URIS: http://localhost:${WEB_PORT:-8080}
+      ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-8080}
+    ports:
+      - "127.0.0.1:${IDP_PORT:-8090}:8080"
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      # zuma-net: wallet/transaction services fetch the JWKS at http://mock-oidc:8080/zuma/jwks
+      - zuma-net
+      - edge

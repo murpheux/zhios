@@ -1,0 +1,169 @@
+# Default-deny for the zuma namespace plus explicit allows:
+#   ingress controller -> graphql-gateway
+#   graphql-gateway    -> wallet-service, transaction-service
+#   wallet-service    <-> transaction-service
+#   wallet/transaction -> mongodb
+#   all services       -> kube-dns, otel-collector (OTLP)
+# Requires a CNI that enforces NetworkPolicy (Calico, Cilium, AWS VPC CNI with policy enabled).
+# The ingress controller namespace is assumed to be "ingress-nginx" — adjust to your controller.
+# transaction-service will need an extra egress rule to its Bitcoin node once an rpc adapter exists.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: zuma
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-and-otlp-egress
+  namespace: zuma
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["wallet-service", "transaction-service", "graphql-gateway"]
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: otel-collector
+      ports:
+        - { protocol: TCP, port: 4318 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graphql-gateway
+  namespace: zuma
+spec:
+  podSelector:
+    matchLabels:
+      app: graphql-gateway
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - { protocol: TCP, port: 3003 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: wallet-service
+      ports:
+        - { protocol: TCP, port: 3001 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: transaction-service
+      ports:
+        - { protocol: TCP, port: 3002 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wallet-service
+  namespace: zuma
+spec:
+  podSelector:
+    matchLabels:
+      app: wallet-service
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: graphql-gateway
+        - podSelector:
+            matchLabels:
+              app: transaction-service
+      ports:
+        - { protocol: TCP, port: 3001 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: transaction-service
+      ports:
+        - { protocol: TCP, port: 3002 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - { protocol: TCP, port: 27017 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transaction-service
+  namespace: zuma
+spec:
+  podSelector:
+    matchLabels:
+      app: transaction-service
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: graphql-gateway
+        - podSelector:
+            matchLabels:
+              app: wallet-service
+      ports:
+        - { protocol: TCP, port: 3002 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: wallet-service
+      ports:
+        - { protocol: TCP, port: 3001 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - { protocol: TCP, port: 27017 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb
+  namespace: zuma
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: wallet-service
+        - podSelector:
+            matchLabels:
+              app: transaction-service
+      ports:
+        - { protocol: TCP, port: 27017 }
+  # No egress: single-node Mongo needs no outbound traffic
+  egress: []

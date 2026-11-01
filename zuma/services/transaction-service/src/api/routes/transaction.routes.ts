@@ -29,7 +29,7 @@ interface TransactionIdParams {
   id: string;
 }
 
-// Body shape validated by createTransactionSchema's JSON schema enum (send|receive).
+// Body shape validated by createTransactionSchema (only type 'send' is accepted).
 interface CreateTransactionBody {
   walletId: string;
   type: TransactionKind;
@@ -56,7 +56,8 @@ export const transactionRoutes: FastifyPluginAsync<TransactionRoutesOptions> = a
   app: FastifyInstance,
   opts: TransactionRoutesOptions,
 ) => {
-  app.addHook('preHandler', app.requireAuth);
+  // onRequest (not preHandler) so unauthenticated calls get 401 before body parsing/schema validation.
+  app.addHook('onRequest', app.requireAuth);
 
   app.post<{ Body: CreateTransactionBody; Headers: IdempotencyHeaders }>(
     '/transactions',
@@ -66,7 +67,6 @@ export const transactionRoutes: FastifyPluginAsync<TransactionRoutesOptions> = a
       const transaction = await opts.createTransactionUseCase.execute(
         { ...request.body, idempotencyKey },
         toActor(request.user),
-        request.headers.authorization,
       );
       reply.status(201);
       return transaction;

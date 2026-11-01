@@ -11,7 +11,7 @@
   "forwardPorts": [8081, 19000, 19001, 19002],
   "customizations": {
     "vscode": {
-      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "msjsdiag.vscode-react-native"]
+      "extensions": ["biomejs.biome", "msjsdiag.vscode-react-native"]
     }
   },
   "remoteEnv": {

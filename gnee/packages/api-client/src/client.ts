@@ -1,17 +1,17 @@
 import { GraphQLClient } from "graphql-request";
+import { toZumaApiError } from "./api-error";
+
+export { toZumaApiError, ZumaApiError } from "./api-error";
+export type { ZumaErrorCode, ZumaGraphQLErrorInfo } from "./api-error";
 
 export interface ZumaClientConfig {
   /** Base URL of the zuma graphql-gateway, e.g. http://localhost:3003/graphql */
   endpoint: string;
-  /** Returns the current JWT bearer token, or null if unauthenticated. Called per-request so token refresh is picked up automatically. */
-  getToken: () => string | null | Promise<string | null>;
-}
-
-export class ZumaApiError extends Error {
-  constructor(message: string, readonly cause?: unknown) {
-    super(message);
-    this.name = "ZumaApiError";
-  }
+  /**
+   * Returns the current JWT bearer token, or null/undefined if unauthenticated.
+   * Called per-request so token refresh is picked up automatically.
+   */
+  getToken: () => string | null | undefined | Promise<string | null | undefined>;
 }
 
 /**
@@ -34,7 +34,7 @@ export function createZumaClient(config: ZumaClientConfig) {
         requestHeaders: token ? { Authorization: `Bearer ${token}` } : undefined,
       } as unknown as Parameters<typeof raw.request<TData, TVariables>>[0]);
     } catch (err) {
-      throw new ZumaApiError("zuma gateway request failed", err);
+      throw toZumaApiError(err);
     }
   }
 

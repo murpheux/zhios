@@ -1,72 +1,100 @@
 # @gnee/web-spa
 
-Web SPA for the Zuma wallet app (React + Vite, TypeScript strict). Talks to
-the same [`@gnee/api-client`](../../../packages/api-client) GraphQL client
-used by [`@gnee/ios`](../../ios) and [`@gnee/android`](../../android), so
-wallet/transaction queries, mutations and types never drift between
-platforms — only the UI layer (DOM here, React Native there) differs.
+Web SPA for the Zuma wallet app (React 19 + Vite, TypeScript strict). It uses
+the same [`@gnee/api-client`](../../../packages/api-client) as
+[`@gnee/ios`](../../ios) and [`@gnee/android`](../../android). That covers
+the GraphQL client, types, sats formatting, send validation and the headless
+send-flow controller. Only the UI layer (DOM here, React Native there) is
+different.
 
-## Setup
+```mermaid
+flowchart LR
+  main["main.tsx"] --> AP["AuthProvider<br/>(oidc-client-ts, sessionStorage)"]
+  AP --> ZP["ZumaProvider<br/>createZumaApi(getAccessToken)"]
+  ZP --> R["Routes"]
+  R --> CB["/callback<br/>signinCallback()"]
+  R --> RA["RequireAuth"]
+  RA --> P["WalletList · WalletDetail · CreateWallet · SendTransaction"]
+  P -- "useSendFlow → createSendFlow" --> API["@gnee/api-client"]
+  API -- "Bearer access_token" --> GW["zuma graphql-gateway"]
+  AP <-- "PKCE + silent renew" --> IDP["OIDC IdP"]
+```
+
+## Run
 
 ```bash
 cd gnee/apps/web/spa
+npm install                                    # from gnee/ (workspaces)
 op run --env-file=env.example -- npm run dev   # resolves op:// refs from 1Password, writes nothing to disk
-# or, without 1Password: cp env.example .env, fill in real values, then `npm run dev`
-npm install
 ```
 
-Requires the zuma `graphql-gateway` (and the two REST services it composes)
-running locally — see `zuma/README.md` and `./scripts/dev-up.sh --full`.
+Requires the zuma `graphql-gateway` (and the two REST services behind it).
+Start them with `../zuma/scripts/dev-up.sh --full`.
 
 ## Auth
 
-Sign-in is OpenID Connect, Authorization Code + PKCE, via
-[`oidc-client-ts`](https://github.com/authts/oidc-client-ts) (`src/auth/`):
+OpenID Connect, Authorization Code + PKCE, via `oidc-client-ts` (`src/auth/`).
 
-- `<AuthProvider>` (`src/auth/AuthContext.tsx`) wraps the app in `main.tsx` and holds the current OIDC `User`.
-- `<RequireAuth>` (`src/auth/RequireAuth.tsx`) wraps every route except `/callback` in `App.tsx` and redirects to the provider's login page when there's no session.
-- `/callback` (`src/pages/CallbackPage.tsx`) completes the code exchange and routes back to where the user started.
-- `ZumaProvider` reads the access token straight off the OIDC session (`useAuth().getAccessToken()`) — no more manual `localStorage` seeding.
+- **Token storage:** `WebStorageStateStore({ store: window.sessionStorage })`.
+  Sessions are per tab and are gone when the tab closes.
+- **Renewal:** `automaticSilentRenew: true`. `getAccessToken()` is
+  referentially stable. It returns the token while valid, tries a silent
+  renew once expired, and returns `undefined` if renewal fails, never an
+  expired token. If renewal fails after expiry, the session is removed and
+  `<RequireAuth>` starts a fresh login.
+- **Return path:** `<RequireAuth>` passes the current URL as
+  `signinRedirect({ state: { returnTo } })`. `/callback`
+  (`signinCallback()`, which also handles the silent-renew iframe) navigates
+  there only if it's a same-origin path (`src/auth/returnTo.ts`), so it can't
+  be used as an open redirect.
+- **Config:** set `VITE_OIDC_AUTHORITY`, `VITE_OIDC_CLIENT_ID`,
+  `VITE_OIDC_SCOPE` (default `openid profile email`) and
+  `VITE_OIDC_AUDIENCE` (sent as `audience`; must equal zuma's
+  `JWT_AUDIENCE`). See `env.example`.
 
-Configure your provider (Auth0, Keycloak, Cognito, Azure AD, …) via `VITE_OIDC_*` in `env.example`:
-register a **public SPA client** (no client secret — PKCE instead), add
-`http://localhost:5173/callback` as an allowed redirect URI, and make sure
-issued access tokens carry `sub` (always) and a `roles` claim if you use
-`requireRole` on the zuma side.
+Register a **public SPA client** with your IdP: no client secret, and add
+`http://localhost:5173/callback` as a redirect URI. zuma's services must
+trust the same IdP's JWKS (`JWT_JWKS_URI`); see `zuma/docs/security.md`.
 
-zuma's `requireAuth` (`wallet-service`/`transaction-service`) must be pointed
-at the same provider's JWKS endpoint to accept these tokens — set
-`JWT_JWKS_URI` (and `JWT_AUDIENCE` if your provider requires an audience) in
-each service's env. See `zuma/docs/security.md`'s "OIDC / JWKS path" for
-details; the default without `JWT_JWKS_URI` is still the original shared-secret
-HS256 `JWT_SECRET`, unrelated to this SPA's login.
+## Send flow
 
-## Testing
+`/wallets/:id/send` works in three steps:
+
+1. **Form.** Pick the unit with the BTC / sats toggle (labels
+   "Amount (BTC)" / "Amount (sats)"). Field errors show while you type: the
+   address must match the wallet's network, the amount must be > 0 and no
+   more than the balance, and the fee rate must be 1–10000 sat/vB.
+2. **Review and confirm.** Shows destination, amount, fee rate and network.
+   One idempotency key is created per review session and reused on every
+   retry.
+3. **Success.** Navigates back to the wallet detail page, which refetches.
+
+Confirm is disabled while a request is in flight. Error codes are mapped to
+friendly messages by `describeZumaError`.
+
+## Lint / Typecheck / Test
 
 ```bash
-npm run lint              # eslint .
-npm run typecheck         # tsc --noEmit
-npm test                  # vitest unit tests (src/**/*.test.tsx), jsdom + RTL
-npx playwright install --with-deps chromium   # once, before first e2e run
-npm run e2e               # playwright e2e (e2e/**/*.spec.ts)
+npm run lint        # biome lint .
+npm run typecheck   # tsc --noEmit
+npm test            # vitest unit tests (src/**/*.test.tsx), jsdom + RTL
+npx playwright install --with-deps chromium   # once
+npm run e2e         # playwright (e2e/**/*.spec.ts); CI reporters: github + html (open: never)
 ```
 
-E2E specs stub the zuma gateway at the network level (`e2e/helpers.ts`) by
-matching GraphQL operation names, so they run without wallet-service,
-transaction-service or graphql-gateway up. They also seed a fake, already
-signed-in OIDC session into `localStorage` (`mockOidcSession`) against fixed
-test `VITE_OIDC_AUTHORITY`/`VITE_OIDC_CLIENT_ID` values set in
-`playwright.config.ts`'s `webServer.env`, so `<RequireAuth>` doesn't redirect
-to a real IdP during the run.
+E2E specs stub the gateway at the network level by GraphQL operation name
+(`e2e/helpers.ts`). They also seed a fake OIDC session into
+**sessionStorage** (`mockOidcSession`) against the fixed test
+authority/client id set in `playwright.config.ts`. No backend or real IdP is
+needed.
 
-## Devcontainer
+## Deploy
 
-`.devcontainer/devcontainer.json` opens the whole `gnee/` workspace in a
-Node 22 container (needed for the `@gnee/api-client` symlinked dep),
-installs deps and Playwright's Chromium on create, and forwards port 5173
-so `npm run dev` is reachable from the host.
+```bash
+../../../scripts/deploy-docker.sh                       # local container, http://localhost:8080
+REGISTRY=… SITE_ADDRESS=… ../../../scripts/deploy-swarm.sh   # swarm + Caddy TLS
+REGISTRY=… WEB_SPA_HOST=… CERT_MANAGER_CLUSTER_ISSUER=… ../../../scripts/deploy-k8s.sh   # k8s + TLS ingress
+```
 
-## Deploying
-
-See [`infrastructure/README.md`](../../../infrastructure/README.md) for
-Docker, Docker Swarm and Kubernetes (via Terraform) deploy paths.
+Config comes from env vars or 1Password `op read`. See
+[`infrastructure/README.md`](../../../infrastructure/README.md).

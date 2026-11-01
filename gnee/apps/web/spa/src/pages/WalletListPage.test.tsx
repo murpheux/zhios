@@ -1,7 +1,7 @@
-import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ZumaApiError } from "@gnee/api-client";
 import { WalletListPage } from "./WalletListPage";
 import { useZuma } from "../ZumaProvider";
 import { useAuth } from "../auth/AuthContext";
@@ -16,7 +16,7 @@ describe("WalletListPage", () => {
       isLoading: false,
       login: vi.fn(),
       logout: vi.fn(),
-      getAccessToken: () => "token",
+      getAccessToken: async () => "token",
     } as any);
   });
 
@@ -29,12 +29,12 @@ describe("WalletListPage", () => {
               id: "wallet-1",
               label: "Primary hot wallet",
               address: "tb1qexample",
-              network: "testnet",
-              type: "hot",
-              balanceCache: "1000",
+              network: "TESTNET",
+              type: "HOT",
+              balanceCache: "150000",
               metadata: {},
               ownerUserId: "user-123",
-              status: "active",
+              status: "ACTIVE",
               createdAt: "",
               updatedAt: "",
             },
@@ -52,12 +52,15 @@ describe("WalletListPage", () => {
     );
 
     await waitFor(() => expect(screen.getByText(/Primary hot wallet/)).toBeInTheDocument());
+    expect(screen.getByText(/0\.00150000 BTC/)).toBeInTheDocument();
     expect(screen.getByText("+ New wallet")).toBeInTheDocument();
   });
 
   it("shows an error message when loading fails", async () => {
     vi.mocked(useZuma).mockReturnValue({
-      wallets: { list: vi.fn().mockRejectedValue(new Error("gateway unreachable")) },
+      wallets: {
+        list: vi.fn().mockRejectedValue(new ZumaApiError("Unable to reach the zuma gateway", { code: "NETWORK_ERROR" })),
+      },
       transactions: {},
     } as any);
 
@@ -67,6 +70,6 @@ describe("WalletListPage", () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(screen.getByText("gateway unreachable")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Can't reach the server/));
   });
 });

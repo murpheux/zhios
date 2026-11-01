@@ -371,3 +371,8 @@ override.tf.json
 # Root .env is covered by ".env" above; Terraform docker state holds container env (secrets)
 infrastructure/terraform/docker/terraform.tfvars
 infrastructure/terraform/docker/*.auto.tfvars
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup

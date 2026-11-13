@@ -142,7 +142,22 @@ zuma/
 
 - Node.js 22 (`nvm use 22`) and npm 10
 - Docker (MongoDB, or the whole stack)
-- `zuma/.env` (git-ignored), copied from `.env.example`. Required keys: `MONGO_ROOT_PASSWORD`, `JWT_SECRET` (at least 32 chars), `INTERNAL_JWT_SECRET` (at least 32 chars, different from `JWT_SECRET`), `METRICS_TOKEN` (at least 16 chars). The full environment table is in [infrastructure/README.md](infrastructure/README.md#runtime-configuration).
+- Secrets from 1Password (see below) or a git-ignored `zuma/.env` copied from `.env.example`. Required keys: `MONGO_ROOT_PASSWORD`, `JWT_SECRET` (at least 32 chars), `INTERNAL_JWT_SECRET` (at least 32 chars, different from `JWT_SECRET`), `METRICS_TOKEN` (at least 16 chars). The full environment table is in [infrastructure/README.md](infrastructure/README.md#runtime-configuration).
+
+## Secrets and local dev (1Password)
+
+`zuma/docker-compose.yml` contains no secrets; it reads `MONGO_ROOT_PASSWORD`, `JWT_SECRET`, `INTERNAL_JWT_SECRET` and `METRICS_TOKEN` from the environment and fails fast if one is missing. [`zuma.op.env`](zuma.op.env) maps them to `op://zuma/mongo-credentials/{username,password}`, `op://zuma/jwt-secrets/{jwt_secret,internal_jwt_secret}` and `op://zuma/metrics/metrics_token` (adjust vault/items to your org). Run from the repo root:
+
+```zsh
+# compose (op plugin run does NOT resolve op:// refs; use op run)
+op run --env-file=zuma/zuma.op.env -- docker compose -f zuma/docker-compose.yml up -d --build
+# tests / dev servers needing the secrets
+op run --env-file=zuma/zuma.op.env -- npm test -w @zuma/wallet-service
+# yone standalone
+cd yone && op run --env-file=yone.op.env -- npm run dev
+```
+
+Unit tests do not need secrets. A plain git-ignored `zuma/.env` (from `.env.example`) remains a fallback only if it holds real values, not `op://` references. `./scripts/dev-up.sh` still requires that fallback `zuma/.env` file and does not yet support `op run`. CI must supply the same variables via its secret store.
 
 ## Run locally
 

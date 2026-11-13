@@ -2,14 +2,19 @@
 # Build contexts are "." (zuma/ root) because services/* and graphql/ depend on shared/*
 # npm workspace packages — see infrastructure/docker/*.Dockerfile for details.
 #
-# Secrets come ONLY from zuma/.env (git-ignored; copy .env.example and fill in). Nothing
-# secret is set inline here, so env_file values are never silently overridden. Required keys:
+# Secrets come ONLY from the process environment, resolved from 1Password at run time:
+#   op run --env-file=zuma.op.env -- docker compose up -d --build     (from zuma/)
+#   op run --env-file=deploy/env/local.op.env -- docker compose up -d --build   (root stack)
+# `op plugin run` does not resolve op:// references; use `op run --env-file`. A plain zuma/.env
+# (git-ignored, e.g. from `make secrets-local`) still works as a fallback, but must never contain
+# op:// references when compose runs without `op run`. Nothing secret is set inline here.
+# Required keys:
 #   MONGO_ROOT_PASSWORD     Mongo root password (MONGO_ROOT_USERNAME optional, default zuma_admin)
 #   JWT_SECRET              client-facing HS256 secret, >= 32 chars
 #   INTERNAL_JWT_SECRET     service-to-service HS256 secret, >= 32 chars, MUST differ from JWT_SECRET
 #                           (required by the base schema on all three services, gateway included)
 #   METRICS_TOKEN           bearer token guarding /metrics, >= 16 chars
-# Optional: JWT_JWKS_URI + JWT_AUDIENCE (audience is required whenever JWKS is set).
+# Optional (only via the .env fallback): JWT_JWKS_URI + JWT_AUDIENCE (audience required with JWKS).
 #
 # NODE_ENV=development is deliberate: transaction-service refuses BITCOIN_ADAPTER=mock under
 # NODE_ENV=production, and this stack has no real Bitcoin node. Production runs via k8s/Lambda.
@@ -21,7 +26,8 @@
 x-service-common: &service-common
   restart: unless-stopped
   env_file:
-    - .env
+    - path: .env
+      required: false # optional fallback; 1Password-injected env is the primary source
   networks:
     - zuma-net
   read_only: true
@@ -33,6 +39,9 @@ x-service-common: &service-common
     - ALL
 
 x-service-env: &service-env
+  JWT_SECRET: ${JWT_SECRET:?run via op run --env-file=zuma.op.env (or set JWT_SECRET)}
+  INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:?run via op run --env-file=zuma.op.env (or set INTERNAL_JWT_SECRET)}
+  METRICS_TOKEN: ${METRICS_TOKEN:?run via op run --env-file=zuma.op.env (or set METRICS_TOKEN)}
   NODE_ENV: development
   LOG_LEVEL: info
   JWT_ISSUER: zuma
@@ -57,7 +66,7 @@ services:
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-zuma_admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in zuma/.env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?run via op run --env-file=zuma.op.env (or set MONGO_ROOT_PASSWORD)}
     ports:
       # Bound to localhost only — Mongo must never be reachable from outside the host
       - "127.0.0.1:27017:27017"
@@ -86,7 +95,7 @@ services:
       <<: *service-env
       SERVICE_NAME: wallet-service
       PORT: "3001"
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in zuma/.env}@mongo:27017/zuma-wallet?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD:?run via op run --env-file=zuma.op.env (or set MONGO_ROOT_PASSWORD)}@mongo:27017/zuma-wallet?authSource=admin
       TRANSACTION_SERVICE_URL: http://transaction-service:3002
     depends_on:
       mongo:
@@ -109,7 +118,7 @@ services:
       <<: *service-env
       SERVICE_NAME: transaction-service
       PORT: "3002"
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in zuma/.env}@mongo:27017/zuma-transaction?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD:?run via op run --env-file=zuma.op.env (or set MONGO_ROOT_PASSWORD)}@mongo:27017/zuma-transaction?authSource=admin
       WALLET_SERVICE_URL: http://wallet-service:3001
       BITCOIN_NETWORK: testnet
       # Explicit: dev-only mock chain client/signer (rejected by config under NODE_ENV=production)
@@ -138,7 +147,7 @@ services:
       SERVICE_NAME: graphql-gateway
       PORT: "3003"
       # Unused by the gateway's own logic but required by the shared env schema
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in zuma/.env}@mongo:27017/zuma-graphql?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-zuma_admin}:${MONGO_ROOT_PASSWORD:?run via op run --env-file=zuma.op.env (or set MONGO_ROOT_PASSWORD)}@mongo:27017/zuma-graphql?authSource=admin
       WALLET_SERVICE_URL: http://wallet-service:3001
       TRANSACTION_SERVICE_URL: http://transaction-service:3002
       # gnee web-spa: Vite dev server (5173) and local nginx container (8080)

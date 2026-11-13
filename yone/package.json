@@ -1,0 +1,38 @@
+{
+  "name": "yone",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Notification gateway: email/SMS (Twilio SendGrid + Twilio), Slack and Teams",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "predev": "tsc -b tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "predev:op": "tsc -b tsconfig.json",
+    "dev:op": "op run --env-file=yone.op.env -- tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "biome lint .",
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage --json --outputFile=coverage/test-results.json"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "@fastify/helmet": "^13.0.0",
+    "@fastify/rate-limit": "^10.0.0",
+    "fastify": "^5.0.0",
+    "pino": "^9.0.0",
+    "zod": "^3.23.8"
+  },
+  "overrides": {
+    "cookie": "^0.6.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/jest": "^29.5.13",
+    "@types/node": "^22.7.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

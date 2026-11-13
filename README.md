@@ -222,6 +222,28 @@ the login form's claims JSON overrides them, and `aud: ["zuma-api","gnee-web-spa
 
 All deploy-time secrets come from 1Password (`op read` / `op plugin run`) or the cloud secret manager. Nothing secret is committed; the `secret.yaml` files only hold `CHANGE_ME` templates.
 
+## Secret Management via 1Password
+
+No secret is committed. Reference files hold `op://` pointers only; `op run` resolves them into the child process environment (nothing written to disk). `op plugin run` only wraps CLIs that have a 1Password shell plugin (aws, gh, ...); it does **not** resolve `op://` references, so use `op run --env-file` for compose, npm and Terraform.
+
+| Reference | Used for |
+|---|---|
+| `op://zuma/mongo-credentials/username`, `.../password` | Mongo root user (`MONGO_ROOT_USERNAME`, default `zuma_admin`) and password |
+| `op://zuma/jwt-secrets/jwt_secret`, `.../internal_jwt_secret` | client HS256 secret; service-to-service secret (must differ) |
+| `op://zuma/metrics/metrics_token` | `/metrics` bearer token |
+| yone items | see [yone/README.md](yone/README.md#1password-setup) |
+
+Vault and item names are adjustable in [`deploy/env/local.op.env`](deploy/env/local.op.env) and [`zuma/zuma.op.env`](zuma/zuma.op.env). Secrets are alphanumeric, >= 32 chars (>= 16 for the metrics token).
+
+```zsh
+op run --env-file=deploy/env/local.op.env -- docker compose up -d --build   # root stack
+op run --env-file=zuma/zuma.op.env -- docker compose -f zuma/docker-compose.yml up -d
+make compose-up COMPOSE="op run --env-file=deploy/env/local.op.env -- docker compose"
+make deploy SECRETS_SOURCE=op                                               # Terraform
+```
+
+Rules: the git-ignored root `.env` may hold either generated local-only values (`make secrets-local` / `make secrets-op`) or `op://` references; a file with references only works under `op run --env-file`, never plain `docker compose`. `.env*` stays in `.gitignore`. CI has no 1Password session by default: inject secrets as GitHub Actions secrets/env (or use a 1Password service account token via `1password/load-secrets-action`); never echo them. Verify with `ggshield secret scan path -r .`.
+
 ## CI (`.github/workflows/`)
 
 | Workflow | Jobs |

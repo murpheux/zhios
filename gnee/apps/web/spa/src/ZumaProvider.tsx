@@ -1,7 +1,8 @@
 import { createZumaApi, type ZumaApi } from "@gnee/api-client";
 import type React from "react";
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { useAuth } from "./auth/AuthContext";
+import { setNewRelicUser } from "./utils/newrelic";
 
 const ZUMA_GATEWAY_URL: string = import.meta.env.VITE_ZUMA_GATEWAY_URL ?? "http://localhost:3003/graphql";
 
@@ -15,7 +16,11 @@ const ZumaContext = createContext<ZumaApi | null>(null);
  * in AuthProvider), so the client is created once, not on every render.
  */
 export function ZumaProvider({ children }: { children: React.ReactNode }) {
-  const { getAccessToken } = useAuth();
+  const { getAccessToken, user } = useAuth();
+  const userId = user?.profile.sub ?? null;
+  useEffect(() => {
+    setNewRelicUser(userId);
+  }, [userId]);
   const api = useMemo(() => createZumaApi({ endpoint: ZUMA_GATEWAY_URL, getToken: getAccessToken }), [getAccessToken]);
   return <ZumaContext.Provider value={api}>{children}</ZumaContext.Provider>;
 }

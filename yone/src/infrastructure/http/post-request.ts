@@ -1,4 +1,5 @@
 import { UpstreamError } from '../../domain/errors';
+import { trackUpstreamCall } from '../newrelic';
 
 export type FetchLike = typeof fetch;
 
@@ -15,7 +16,10 @@ export interface PostRequestOptions {
 // POST with a hard timeout. Any non-2xx or transport failure becomes an UpstreamError whose client
 // message is fixed (provider response bodies can echo recipients/credentials and are never surfaced).
 // Not retried: sends are not idempotent, so a retry could duplicate a notification.
-export const postRequest = async (opts: PostRequestOptions): Promise<Response> => {
+export const postRequest = (opts: PostRequestOptions): Promise<Response> =>
+  trackUpstreamCall(opts.upstream, () => doPost(opts));
+
+const doPost = async (opts: PostRequestOptions): Promise<Response> => {
   let response: Response;
   try {
     response = await opts.fetchImpl(opts.url, {

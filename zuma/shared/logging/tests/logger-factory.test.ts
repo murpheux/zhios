@@ -1,5 +1,6 @@
 // Captures pino output in-process: createLogger() takes no destination, so wrap pino to inject one.
 const mockLines: string[] = [];
+const mockTransports: unknown[] = [];
 jest.mock('pino', () => {
   const actual = jest.requireActual('pino');
   const sink = new (jest.requireActual('node:stream').Writable)({
@@ -9,6 +10,11 @@ jest.mock('pino', () => {
     },
   });
   const wrapped = Object.assign((options: unknown) => actual(options, sink), actual);
+  // Real transports spawn workers (and need pino-pretty/pino-roll); record the config and reuse the sink.
+  wrapped.transport = (options: unknown) => {
+    mockTransports.push(options);
+    return sink;
+  };
   wrapped.default = wrapped;
   return wrapped;
 });
@@ -31,6 +37,22 @@ describe('createLogger', () => {
     const record = lastRecord();
     expect(record).toMatchObject({ name: 'wallet-service', msg: 'hello', walletId: 'w1', level: 30 });
     expect(record.time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
+
+  it('routes through pino.transport when pretty or file output is requested', () => {
+    mockTransports.length = 0;
+    const logger = createLogger({
+      serviceName: 'svc',
+      pretty: true,
+      file: { path: './logs', maxSizeBytes: 1024, rotateDays: 2 },
+    });
+    logger.info('via transport');
+    expect(mockTransports).toEqual([
+      { targets: [expect.objectContaining({ target: 'pino-pretty' }), expect.objectContaining({ target: 'pino-roll' })] },
+    ]);
+    expect(lastRecord()).toMatchObject({ name: 'svc', msg: 'via transport' });
+    createLogger({ serviceName: 'svc', file: { path: './logs', maxSizeBytes: 1, rotateDays: 1 } });
+    expect(mockTransports).toHaveLength(2);
   });
 
   it('honours a custom level', () => {

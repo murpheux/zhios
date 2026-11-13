@@ -257,6 +257,354 @@ the mock IdP's JWKS (`JWT_ISSUER=http://localhost:8090/zuma`, `JWT_AUDIENCE=zuma
 
 Operational detail (probes, NetworkPolicy, TLS, how secrets stay out of Terraform state, EKS endpoint access) is in [infrastructure/README.md](infrastructure/README.md).
 
+## Observability: Pino Logging and New Relic APM
+
+All three services use `@zuma/shared-logging` (pino) for structured logging and optionally the New Relic Node agent for APM. Defaults are safe: JSON on stdout, file logging off, APM off.
+
+### Installation
+
+Pino logging and New Relic APM are pre-configured. Install dependencies:
+
+```bash
+npm install
+```
+
+This installs: `pino`, `pino-pretty`, `pino-roll` (file rotation), and `newrelic`.
+
+### Configuration
+
+All variables are defined in `shared/config/src/env-schema.ts` and validated at startup.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LOG_LEVEL` | `info` | `fatal`, `error`, `warn`, `info`, `debug`, `trace` |
+| `LOG_TO_FILE` | false (true in prod) | Write rotating files via `pino-roll` (daily rotation) |
+| `LOG_FILE_PATH` | `./logs` | Directory for log files (creates if missing) |
+| `LOG_FILE_MAX_SIZE` | `10485760` (10MB) | Bytes per file before rotating |
+| `LOG_FILE_ROTATE_DAYS` | `7` | Days of logs to retain |
+| `NEW_RELIC_ENABLED` | `false` | Start the New Relic APM agent |
+| `NEW_RELIC_LICENSE_KEY` | unset | **Required if NEW_RELIC_ENABLED=true** |
+| `NEW_RELIC_APP_NAME` | service name | Auto-set: wallet-service, transaction-service, graphql-gateway |
+| `NEW_RELIC_LOG_LEVEL` | `info` | New Relic agent's own log level |
+| `NEWRELIC_LOGS_ENABLED` | `false` | Forward logs to New Relic Logs API (requires license key) |
+| `NEWRELIC_LOGS_ENDPOINT` | `https://log-api.newrelic.com/log/v1` | New Relic Logs API endpoint |
+
+### Local Development (Pretty Logs)
+
+Run with debug logging and pretty-printed output:
+
+```bash
+# Single service
+LOG_LEVEL=debug npm run dev -w @zuma/wallet-service
+
+# Example output:
+# [12:34:56.789] INFO (zuma-wallet-service/12345): Server listening
+#   service: "wallet-service"
+#   port: 3001
+#   env: "development"
+```
+
+### Local Development with File Logging
+
+Enable file logging to disk:
+
+```bash
+# File logs go to ./logs/
+LOG_TO_FILE=true npm run dev
+
+# View logs
+tail -f logs/wallet-service.*.log
+tail -f logs/transaction-service.*.log
+tail -f logs/graphql-gateway.*.log
+```
+
+### Using 1Password (Recommended)
+
+Inject secrets from 1Password CLI:
+
+```bash
+# Edit zuma/zuma.op.env (already configured with paths to vault items)
+# Then run with full env including New Relic license key
+NEW_RELIC_ENABLED=true LOG_TO_FILE=true op run --env-file=zuma/zuma.op.env -- npm run dev -w @zuma/wallet-service
+```
+
+### Output Formats
+
+**Development** (`NODE_ENV=development`):
+- Pretty-printed console output with colors
+- Easier to read during development
+
+**Production** (`NODE_ENV=production`):
+- JSON structured logs to stdout
+- Each line is a complete JSON object
+- Machine-parseable for log aggregation systems
+- File logs: JSON format to `./logs/<service>.<date>.log`
+
+### Log Files and Rotation
+
+**Location**: `./logs/` directory (auto-created)
+
+**File naming**:
+```
+wallet-service.2026-11-12.1.log      ← Latest
+wallet-service.2026-11-12.2.log
+wallet-service.2026-11-11.1.log      ← Yesterday
+wallet-service.2026-11-10.1.log
+wallet-service.2026-11-03.1.log      ← 7 days back (auto-deleted)
+```
+
+**Rotation triggers**:
+- Daily at midnight (UTC)
+- Immediately if file exceeds 10MB
+- Old files deleted after 7 days
+
+### Sensitive Data Redaction
+
+The following fields are automatically redacted in all logs (never sent to New Relic or files):
+
+```javascript
+// Redacted patterns:
+"password", "token", "secret", "apiKey", "Authorization", "x-service-token",
+"creditCard", "cvv", "accountNumber", "privateKey"
+
+// Example:
+{
+  "Authorization": "Bearer [redacted]",
+  "password": "[redacted]",
+  "x-service-token": "[redacted]"
+}
+```
+
+### New Relic APM Setup
+
+#### Get a License Key
+
+1. Sign up at https://newrelic.com (free tier available)
+2. Go to API Keys: https://one.newrelic.com/api-keys
+3. Create or copy your **INGEST** license key (32 characters)
+
+#### Configure Environment
+
+```bash
+# Option 1: Add to .env file
+NEW_RELIC_ENABLED=true
+NEW_RELIC_LICENSE_KEY=<your-license-key>
+NEW_RELIC_LOGS_ENABLED=true
+
+# Option 2: Via 1Password (recommended for production)
+# Add to zuma/zuma.op.env:
+# NEW_RELIC_LICENSE_KEY=op://zuma/newrelic/license-key
+
+# Option 3: Docker/ECS/EKS
+# Inject via secrets manager (see infrastructure/README.md)
+```
+
+#### Start Services with APM
+
+```bash
+# Local testing
+NEW_RELIC_ENABLED=true \
+NEW_RELIC_LICENSE_KEY=<your-key> \
+npm run dev
+
+# Or with 1Password
+op run --env-file=zuma/zuma.op.env -- npm run dev
+```
+
+#### Verify APM is Running
+
+Check startup logs:
+```
+INFO (wallet-service): New Relic agent initialized
+  license_key_set: true
+  distributed_tracing: true
+```
+
+Then visit New Relic UI (after 1-2 minutes of traffic):
+- **APM Dashboard**: https://one.newrelic.com/nr1-core/apm-sql-databases/home
+- **Logs**: https://one.newrelic.com/logs
+- **Distributed Traces**: https://one.newrelic.com/distributed-tracing
+
+### What Gets Monitored
+
+**Automatic (New Relic Agent)**:
+- ✅ HTTP requests/responses (Fastify routes)
+- ✅ Database queries (Mongoose/MongoDB)
+- ✅ External HTTP calls (axios, native fetch)
+- ✅ Error rates and stack traces
+- ✅ Response times and throughput
+
+**Custom Metrics** (wallet-service, transaction-service):
+- ✅ Ledger operations
+- ✅ Transaction lifecycle events
+- ✅ Service-to-service calls
+
+**Distributed Tracing**:
+- ✅ Cross-service request flow
+- ✅ Latency tracking end-to-end
+- ✅ Error propagation tracking
+
+### Testing Logging
+
+```bash
+# 1. Start all services locally with file logging
+LOG_TO_FILE=true npm run dev
+
+# 2. In another terminal, check log files are created
+ls -lh logs/
+
+# 3. View logs in real-time (from any service)
+tail -f logs/wallet-service.*.log | jq .
+
+# 4. Generate some traffic
+curl -H "Authorization: Bearer <token>" http://localhost:3001/api/v1/wallets
+
+# 5. Verify log entries appear
+grep "GET /api/v1/wallets" logs/wallet-service.*.log
+
+# 6. Test with New Relic (optional)
+NEW_RELIC_ENABLED=true NEW_RELIC_LICENSE_KEY=<key> npm run dev
+# Wait 1-2 minutes, then check New Relic UI
+```
+
+### Troubleshooting
+
+#### Logs not appearing in files
+
+```bash
+# Check LOG_TO_FILE is set
+echo $LOG_TO_FILE
+
+# Check directory exists and is writable
+ls -la logs/
+chmod 755 logs/
+
+# Check disk space
+df -h logs/
+```
+
+#### New Relic not connecting
+
+```bash
+# Verify license key is set and valid
+echo $NEW_RELIC_LICENSE_KEY
+
+# Check agent started (look for startup logs)
+npm run dev 2>&1 | grep -i "new relic"
+
+# Verify network access to New Relic
+curl -I https://api.newrelic.com/
+
+# Enable agent debug logging
+NEW_RELIC_LOG_LEVEL=debug npm run dev
+```
+
+#### High log volume in production
+
+```bash
+# Reduce log level
+LOG_LEVEL=warn npm run dev
+
+# Disable New Relic log forwarding if not needed
+NEWRELIC_LOGS_ENABLED=false npm run dev
+```
+
+#### Log files not rotating
+
+```bash
+# Check cron is running (if using systemd timer)
+systemctl status zuma-logrotate
+
+# Manual rotation
+find logs/ -name "*.log" -mtime +7 -delete
+
+# Or use logrotate config (see infrastructure/logrotate.conf)
+```
+
+### Docker Deployment
+
+Logs in Docker go to stdout (captured by docker logs):
+
+```bash
+# Start with file logging
+docker-compose up -e LOG_TO_FILE=true
+
+# View container logs
+docker compose logs -f wallet-service
+docker compose logs -f transaction-service
+docker compose logs -f graphql
+
+# File logs also appear in container at /app/logs/
+docker exec <container-id> tail -f /app/logs/wallet-service.*.log
+```
+
+### ECS Deployment
+
+Logs are sent to CloudWatch Logs:
+
+```bash
+# View ECS task logs
+aws logs tail /ecs/zuma-wallet-service --follow
+
+# Search logs
+aws logs filter-log-events \
+  --log-group-name /ecs/zuma-wallet-service \
+  --filter-pattern "ERROR"
+```
+
+### EKS Deployment
+
+Logs are captured by kubectl:
+
+```bash
+# View pod logs
+kubectl logs -f -n zuma wallet-service-<pod-id>
+
+# Follow all wallet-service pods
+kubectl logs -f -n zuma -l app=wallet-service
+
+# Search logs
+kubectl logs -n zuma -l app=wallet-service | grep ERROR
+```
+
+### New Relic NRQL Queries
+
+Example queries to monitor your services:
+
+```sql
+-- Average response time per endpoint
+SELECT average(duration) FROM Transaction 
+WHERE service.name LIKE 'zuma-%'
+FACET http.request.url
+
+-- Transaction error rate
+SELECT percentage(count(*), WHERE error = true) 
+FROM Transaction
+WHERE service.name LIKE 'zuma-%'
+SINCE 1 hour ago
+
+-- Database operation metrics
+SELECT average(duration) FROM Metric
+WHERE metric.name LIKE 'Datastore/statement/MongoDB/%'
+FACET metric.name
+SINCE 1 hour ago
+
+-- View application logs
+SELECT * FROM Log
+WHERE service.name = 'zuma-wallet-service'
+LIMIT 100
+```
+
+### Production Best Practices
+
+1. **Always use 1Password for secrets**: Never hardcode license keys
+2. **Enable New Relic Logs**: Forward application logs for centralized monitoring
+3. **Monitor file disk usage**: Ensure `/logs` partition has adequate space
+4. **Rotate logs regularly**: Set up cron job or use systemd timer
+5. **Set appropriate log levels**: Use `warn` or `error` in production
+6. **Test log queries**: Verify your monitoring alerts work before production
+7. **Keep licenses fresh**: Renew New Relic subscriptions before expiration
+
 ## CI
 
 [`.github/workflows/zuma-ci.yml`](../.github/workflows/zuma-ci.yml) runs: lint (Biome), build, unit tests, secret scan (gitleaks), infra lint (shellcheck, hadolint, kubeconform, `docker compose config`), terraform fmt/validate, a docker-build matrix with Trivy, and a security audit.

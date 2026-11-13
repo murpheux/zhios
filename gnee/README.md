@@ -223,6 +223,471 @@ In both cases zuma's `requireAuth` verifies the token. See
 `zuma/docs/security.md` ("OIDC / JWKS path"). Wallet ownership is always
 taken from the token, so clients can't set `ownerUserId`.
 
+## Observability: Error Tracking and APM
+
+gnee apps include New Relic Browser (web) and Mobile (React Native) agents for error tracking, performance monitoring, and custom event tracking.
+
+### Installation
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+This installs: `@newrelic/browser-agent` (web) and `newrelic-react-native-agent` (mobile).
+
+### Web App (React + Vite)
+
+#### Setup
+
+1. **Get New Relic License Key**:
+   - Sign up at https://newrelic.com (free tier available)
+   - Go to https://one.newrelic.com → Select your account
+   - Copy your **INGEST** license key (32 characters)
+
+2. **Configure**:
+   ```bash
+   # Create apps/web/spa/.env
+   VITE_NEWRELIC_ENABLED=true
+   VITE_NEWRELIC_LICENSE_KEY=<your-license-key>
+   VITE_NEWRELIC_ACCOUNT_ID=<account-id>       # From New Relic UI
+   VITE_NEWRELIC_APP_ID=<app-id>               # From New Relic UI
+   VITE_NEWRELIC_AGENT_ID=<agent-id>           # From New Relic UI
+   ```
+
+3. **Start Dev Server**:
+   ```bash
+   cd apps/web/spa
+   npm run dev
+   
+   # Open browser DevTools → Network
+   # Filter for "nr-data.net" - should see 200/204 responses
+   ```
+
+#### Features
+
+- 📊 **Real User Monitoring (RUM)**: Page load times, user interactions, core web vitals
+- 🔴 **Error Tracking**: Automatic error boundary capture, JavaScript errors, React errors
+- 🎯 **Custom Events**: Track wallet creation, transaction sends, user actions
+- 📍 **Breadcrumbs**: User action trail before errors
+- 🔐 **Data Privacy**: No sensitive data (tokens, secrets, variables) sent to New Relic
+
+#### Error Boundary
+
+Errors are automatically captured and reported:
+
+```tsx
+// Automatically wrapped in error boundary
+<ZumaApp />
+
+// Errors are sent to New Relic with:
+// - Error message and stack trace
+// - React component tree
+// - User ID (from token)
+// - Page URL and timestamp
+// - Browser/device info
+```
+
+#### Custom Events
+
+Track important business transactions:
+
+```typescript
+// Example: wallet created
+useNewRelic(nrAgent => {
+  nrAgent.recordCustomEvent('wallet_created', {
+    walletId: '...',
+    network: 'bitcoin',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Example: transaction sent
+useNewRelic(nrAgent => {
+  nrAgent.recordCustomEvent('transaction_sent', {
+    transactionId: '...',
+    amountSats: 1000,
+    status: 'pending',
+    duration_ms: 245
+  });
+});
+```
+
+#### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_NEWRELIC_ENABLED` | `false` | Enable/disable New Relic Browser agent |
+| `VITE_NEWRELIC_LICENSE_KEY` | unset | **Required if enabled** |
+| `VITE_NEWRELIC_ACCOUNT_ID` | unset | New Relic account ID |
+| `VITE_NEWRELIC_APP_ID` | unset | Browser app ID from New Relic UI |
+| `VITE_NEWRELIC_AGENT_ID` | unset | Agent ID from New Relic UI |
+
+#### Testing
+
+```bash
+# 1. Start with New Relic enabled
+cd apps/web/spa
+VITE_NEWRELIC_ENABLED=true npm run dev
+
+# 2. Open app in browser
+open http://localhost:5173
+
+# 3. Trigger an error (optional)
+# - Create a wallet
+# - Send a transaction
+# - Check browser console
+
+# 4. Verify in New Relic UI (after 1-2 minutes)
+# https://one.newrelic.com/nr1-core/browser/overview
+```
+
+#### Viewing Data in New Relic
+
+**Browser Dashboard**:
+- https://one.newrelic.com/nr1-core/browser/overview
+- View page load times, user interactions, JavaScript errors
+
+**Errors**:
+- https://one.newrelic.com/nr1-core/errors/overview
+- See JavaScript errors, React errors, stack traces
+
+**Custom Events**:
+- https://one.newrelic.com/logs
+- Query: `eventType = 'wallet_created'` or `eventType = 'transaction_sent'`
+
+**Session Replay** (if enabled):
+- https://one.newrelic.com/nr1-core/session-replay/overview
+- Watch user sessions and interactions
+
+### Mobile App (React Native)
+
+#### Setup
+
+1. **Get New Relic License Key and App Token**:
+   - Go to https://one.newrelic.com/mobile
+   - Create or select a Mobile app
+   - Copy the **License Key** and **App Token** (different from Browser)
+
+2. **Configure**:
+   ```bash
+   # Update app.json or eas.json
+   {
+     "plugins": [
+       [
+         "newrelic-react-native-agent",
+         {
+           "newRelicEnabled": true
+         }
+       ]
+     ],
+     "extra": {
+       "eas": {
+         "projectId": "your-project-id"
+       }
+     },
+     "env": {
+       "production": {
+         "EXPO_PUBLIC_NEWRELIC_LICENSE_KEY": "<license-key>",
+         "EXPO_PUBLIC_NEWRELIC_APP_TOKEN": "<app-token>",
+         "EXPO_PUBLIC_NEWRELIC_ENABLED": "true"
+       },
+       "development": {
+         "EXPO_PUBLIC_NEWRELIC_ENABLED": "false"
+       }
+     }
+   }
+   ```
+
+3. **Install Native Modules**:
+   ```bash
+   # iOS: Install New Relic pod
+   cd apps/ios
+   pod install
+   
+   # Android: Already handled by Gradle plugin
+   ```
+
+4. **Build**:
+   ```bash
+   # Local build for testing
+   eas build --platform ios --local
+   eas build --platform android --local
+   
+   # Or use Expo Go for development (without native modules)
+   ```
+
+#### Features
+
+- 📱 **Mobile Performance**: App load time, screen transitions, frame rate
+- 🔴 **Crash Reporting**: Unhandled exceptions, native crashes
+- ⏱️ **Network Monitoring**: HTTP request tracking, API response times
+- 🎯 **Custom Events**: Wallet operations, transaction events
+- 📊 **Device Info**: OS version, device type, network connection
+
+#### Error Boundary
+
+React Native errors are automatically captured:
+
+```tsx
+// Wrap root app with error boundary
+<ErrorBoundary>
+  <ZumaMobileApp />
+</ErrorBoundary>
+
+// Errors automatically sent to New Relic:
+// - Error message and stack trace
+// - App state snapshot
+// - User session ID
+// - Device info (OS, version, model)
+```
+
+#### Custom Events
+
+Track mobile-specific events:
+
+```typescript
+// Example: wallet created on mobile
+useNewRelic(nrAgent => {
+  nrAgent.recordCustomEvent('wallet_created_mobile', {
+    walletId: '...',
+    platform: 'ios',  // or 'android'
+    creationTime: new Date().toISOString()
+  });
+});
+
+// Example: app crashed and recovered
+useNewRelic(nrAgent => {
+  nrAgent.recordCustomEvent('app_crash_recovery', {
+    crashReason: 'memory_pressure',
+    recoveryTime: 2500  // ms
+  });
+});
+```
+
+#### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `EXPO_PUBLIC_NEWRELIC_ENABLED` | `false` | Enable/disable Mobile agent |
+| `EXPO_PUBLIC_NEWRELIC_LICENSE_KEY` | unset | **Required if enabled** |
+| `EXPO_PUBLIC_NEWRELIC_APP_TOKEN` | unset | **Required if enabled** |
+
+#### Testing
+
+```bash
+# 1. Build for iOS or Android
+eas build --platform ios --local
+
+# 2. Install on simulator or device
+# (Instructions appear after build completes)
+
+# 3. Test app functionality
+# - Create wallet
+# - Send transaction
+# - Trigger intentional error (optional)
+
+# 4. Check New Relic Mobile UI (after 1-2 minutes)
+# https://one.newrelic.com/mobile
+```
+
+#### Viewing Data in New Relic
+
+**Mobile Overview**:
+- https://one.newrelic.com/nr1-core/mobile/overview
+- App performance metrics, crash rate, user engagement
+
+**Crashes**:
+- https://one.newrelic.com/nr1-core/mobile/crashes
+- See crash details, stack traces, affected users
+
+**Network**:
+- https://one.newrelic.com/nr1-core/mobile/network
+- HTTP request monitoring, latency, error rates
+
+**Custom Events**:
+- https://one.newrelic.com/nrql-query-builder
+- Query: `SELECT * FROM Mobile WHERE eventType = 'wallet_created_mobile'`
+
+### API Client Shared Utilities
+
+#### Error Tracking
+
+Errors from GraphQL and HTTP calls are automatically reported:
+
+```typescript
+// src/error-tracking.ts
+
+// GraphQL errors (operation failures)
+reportGraphQLError({
+  operationName: 'CreateWallet',
+  error: 'INSUFFICIENT_BALANCE',
+  httpStatus: 409
+});
+
+// Network errors (timeout, connection failed)
+reportNetworkError({
+  endpoint: 'graphql-gateway',
+  status: 503,
+  duration: 5000
+});
+```
+
+#### Custom Events (Shared)
+
+Cross-platform event tracking:
+
+```typescript
+// src/wallets.ts
+recordWalletCreated({
+  walletId: '...',
+  network: 'bitcoin',
+  timestamp: new Date().toISOString()
+});
+
+// src/send-flow.ts
+recordTransactionSent({
+  transactionId: '...',
+  amountSats: 1000,
+  platform: isPlatform ? 'mobile' : 'web'
+});
+```
+
+### Environment Variables
+
+**Web** (`apps/web/spa/.env.example`):
+```
+VITE_NEWRELIC_ENABLED=false
+VITE_NEWRELIC_LICENSE_KEY=
+VITE_NEWRELIC_ACCOUNT_ID=
+VITE_NEWRELIC_APP_ID=
+VITE_NEWRELIC_AGENT_ID=
+```
+
+**Mobile** (`app.json` or `eas.json`):
+```
+EXPO_PUBLIC_NEWRELIC_ENABLED=false
+EXPO_PUBLIC_NEWRELIC_LICENSE_KEY=
+EXPO_PUBLIC_NEWRELIC_APP_TOKEN=
+```
+
+### Sensitive Data & Privacy
+
+✅ **What is NOT sent to New Relic**:
+- User passwords
+- JWT tokens
+- Credit card numbers
+- Account numbers
+- Private keys
+- API keys
+- GraphQL variables (containing user data)
+
+✅ **What IS sent**:
+- Error messages (no sensitive context)
+- Operation names (not variables)
+- Page/screen names
+- Custom event names and metrics
+- Device/browser info
+- Network request URLs (no query parameters)
+
+### Troubleshooting
+
+#### Web: No data in New Relic
+
+```bash
+# 1. Verify environment variables are set
+echo $VITE_NEWRELIC_ENABLED
+echo $VITE_NEWRELIC_LICENSE_KEY
+
+# 2. Check browser console for errors
+# Open DevTools → Console tab
+
+# 3. Verify network requests
+# DevTools → Network → filter for "nr-data.net"
+# Should see 200 or 204 responses
+
+# 4. Check CORS/CSP issues
+# Allow nr-data.net in Content Security Policy
+```
+
+#### Mobile: No data in New Relic
+
+```bash
+# 1. Verify New Relic agent installed
+# iOS: Check Pods in Xcode build log
+# Android: Check Gradle sync in Android Studio
+
+# 2. Confirm license key and app token
+# Check app.json or eas.json
+
+# 3. Test on physical device or simulator
+# Some features only work on real devices
+
+# 4. Check New Relic Mobile app configuration
+# Verify app was created and properly named
+```
+
+#### High data volume
+
+```bash
+# 1. Disable for development
+VITE_NEWRELIC_ENABLED=false npm run dev
+
+# 2. Reduce session recording (if enabled)
+# Disable in New Relic UI → Settings
+
+# 3. Filter events (in app)
+// Only send events for important actions
+if (isProduction) {
+  recordCustomEvent('wallet_created', data);
+}
+```
+
+### NRQL Queries (Data Exploration)
+
+```sql
+-- Web: top errors
+SELECT count(*) FROM JavaScriptError
+WHERE appName = 'zuma-web'
+FACET errorMessage
+LIMIT 10
+
+-- Mobile: crash trends
+SELECT count(*) FROM MobileSession
+WHERE appName = 'zuma-mobile' AND crashCount > 0
+FACET platformVersion
+TIMESERIES 1 day
+
+-- Custom events: wallet creation rate
+SELECT count(*) FROM Mobile
+WHERE eventType = 'wallet_created'
+TIMESERIES 1 day
+
+-- API health: average request time
+SELECT average(duration) FROM Mobile
+WHERE http.method = 'POST' AND http.url LIKE 'graphql%'
+FACET http.statusCode
+```
+
+### Production Best Practices
+
+1. **Test on staging first**: Verify everything works before production
+2. **Monitor error rates**: Set up alerts for error spike
+3. **Use custom events**: Track key business transactions
+4. **Respect user privacy**: Never send PII or secrets
+5. **Monitor data costs**: New Relic charges by data ingestion volume
+6. **Update regularly**: Keep `@newrelic/browser-agent` and `newrelic-react-native-agent` updated
+7. **Test error handling**: Verify error boundary and recovery work
+
+### See Also
+
+- **Web App**: `apps/web/spa/README.md`
+- **iOS App**: `apps/ios/README.md`
+- **Android App**: `apps/android/README.md`
+- **API Client**: `packages/api-client/README.md`
+- **New Relic Docs**: https://docs.newrelic.com/
+
 ## Lint
 
 ```bash

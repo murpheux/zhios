@@ -56,6 +56,19 @@ const yoneEnvSchema = z
     SERVICE_NAME: z.string().min(1).default('yone'),
     PORT: z.coerce.number().int().positive().default(3004),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+    LOG_TO_FILE: z.enum(['true', 'false']).optional(), // default resolved in transform: true in production
+    LOG_FILE_PATH: z.string().min(1).default('./logs'),
+    LOG_FILE_MAX_SIZE: z.coerce.number().int().positive().default(10_485_760),
+    LOG_FILE_ROTATE_DAYS: z.coerce.number().int().positive().default(7),
+    NEWRELIC_LOGS_ENABLED: flag(false),
+    NEWRELIC_LOGS_ENDPOINT: z.string().url().default('https://log-api.newrelic.com/log/v1'),
+
+    // New Relic APM (the agent itself is bootstrapped from process.env in infrastructure/newrelic.ts)
+    NEW_RELIC_ENABLED: flag(false),
+    NEW_RELIC_LICENSE_KEY: optionalString(z.string().min(1)),
+    NEW_RELIC_APP_NAME: z.string().min(1).default('yone-service'),
+    NEW_RELIC_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
     // HTTP hardening
@@ -112,10 +125,25 @@ const yoneEnvSchema = z
         message: 'Set TWILIO_SMS_FROM or TWILIO_MESSAGING_SERVICE_SID',
       });
     }
+    if (env.NEW_RELIC_ENABLED && !env.NEW_RELIC_LICENSE_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEW_RELIC_LICENSE_KEY'],
+        message: 'required when NEW_RELIC_ENABLED=true',
+      });
+    }
+    if (env.NEWRELIC_LOGS_ENABLED && !env.NEW_RELIC_LICENSE_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEW_RELIC_LICENSE_KEY'],
+        message: 'required when NEWRELIC_LOGS_ENABLED=true',
+      });
+    }
     if (env.NODE_ENV === 'production' && env.ALLOWED_SERVICE_TOKENS.length === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['ALLOWED_SERVICE_TOKENS'], message: 'must not be empty' });
     }
-  });
+  })
+  .transform((env) => ({ ...env, LOG_TO_FILE: (env.LOG_TO_FILE ?? (env.NODE_ENV === 'production' ? 'true' : 'false')) === 'true' }));
 
 export type YoneConfig = z.infer<typeof yoneEnvSchema>;
 

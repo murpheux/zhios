@@ -98,3 +98,17 @@ REGISTRY=… WEB_SPA_HOST=… CERT_MANAGER_CLUSTER_ISSUER=… ../../../scripts/d
 
 Config comes from env vars or 1Password `op read`. See
 [`infrastructure/README.md`](../../../infrastructure/README.md).
+
+## Observability (New Relic Browser)
+
+`src/utils/newrelic.ts` starts the `@newrelic/browser-agent` npm loader from `main.tsx` before React renders. It is a no-op unless `VITE_NEWRELIC_ENABLED=true` and `VITE_NEWRELIC_{LICENSE_KEY,APP_ID,ACCOUNT_ID}` are set (see `env.example`; `AGENT_ID` defaults to the app id).
+
+- **Automatic:** page views and SPA route changes, uncaught exceptions, unhandled promise rejections, fetch/XHR timings, distributed tracing.
+- **React errors:** `src/utils/error-boundary.tsx` wraps the app, logs to the console and calls `noticeError`.
+- **GraphQL and network errors:** `@gnee/api-client` reports every failed request (operation name, error code, HTTP status; never variables or tokens) through `setErrorReporter`, which `initNewRelic` registers.
+- **Custom events** (New Relic `PageAction`): `wallet_created` and `transaction_sent` come from `@gnee/api-client`. Components can add their own with `useNewRelic()` (`trackEvent`, `trackInteraction`, `recordError`).
+- **User id:** the OIDC `sub` is set via `setUserId` after login and cleared on logout. No email or name is sent.
+- **Attributes:** `environment` (`VITE_APP_ENV`, else the Vite mode), `platform=web`, and the app version (`VITE_APP_VERSION`).
+- **CSP:** `connect-src` allows `https://bam.nr-data.net` (`infrastructure/docker/web-spa.security-headers.inc`). Because the agent is bundled, `script-src` stays `'self'`. EU-region accounts use `bam.eu01.nr-data.net`, so change both the CSP and `BEACON` in `newrelic.ts`.
+
+Verify: run with `VITE_NEWRELIC_ENABLED=true`, open DevTools -> Network, filter `nr-data.net`, and expect 200/204 responses. Query `PageAction` and `JavaScriptError` in NRQL.

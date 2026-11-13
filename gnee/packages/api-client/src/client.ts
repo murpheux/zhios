@@ -1,5 +1,6 @@
 import { GraphQLClient } from "graphql-request";
 import { toZumaApiError } from "./api-error";
+import { operationName, reportError } from "./error-tracking";
 
 export { toZumaApiError, ZumaApiError } from "./api-error";
 export type { ZumaErrorCode, ZumaGraphQLErrorInfo } from "./api-error";
@@ -34,7 +35,16 @@ export function createZumaClient(config: ZumaClientConfig) {
         requestHeaders: token ? { Authorization: `Bearer ${token}` } : undefined,
       } as unknown as Parameters<typeof raw.request<TData, TVariables>>[0]);
     } catch (err) {
-      throw toZumaApiError(err);
+      const apiError = toZumaApiError(err);
+      // Variables are deliberately not reported: they carry addresses and amounts.
+      reportError(apiError, {
+        source: "graphql",
+        operation: operationName(document),
+        code: apiError.code,
+        statusCode: apiError.statusCode,
+        kind: apiError.code === "NETWORK_ERROR" ? "network" : "graphql",
+      });
+      throw apiError;
     }
   }
 

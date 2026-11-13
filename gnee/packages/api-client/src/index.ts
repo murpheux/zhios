@@ -1,6 +1,8 @@
 export * from "./types";
 export { createZumaClient, toZumaApiError, ZumaApiError } from "./client";
 export type { ZumaClient, ZumaClientConfig, ZumaErrorCode, ZumaGraphQLErrorInfo } from "./client";
+export { operationName, reportError, setErrorReporter, trackEvent } from "./error-tracking";
+export type { ErrorReporter, TelemetryAttributes, TelemetryValue } from "./error-tracking";
 export { describeZumaError, isRetryableError } from "./errors";
 export { humanizeEnum } from "./format";
 export * from "./sats";

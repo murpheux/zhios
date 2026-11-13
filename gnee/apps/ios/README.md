@@ -75,3 +75,13 @@ Build profiles are in `eas.json` (`development` / `preview` / `production`).
 The App Store Connect API key is used for non-interactive `eas submit`. The key comes from 1Password (`op read`), is written to a 0600 temp
 file only after `eas build`, and is deleted on exit. See
 `scripts/deploy-mobile.sh` and `infrastructure/README.md`.
+
+## Observability (New Relic Mobile)
+
+`@gnee/mobile-ui` starts the New Relic Mobile agent (`newrelic-react-native-agent`) from `<ZumaMobileApp newRelic={...}>`. `App.tsx` reads `EXPO_PUBLIC_NEWRELIC_ENABLED`, `EXPO_PUBLIC_NEWRELIC_APP_TOKEN` and `EXPO_PUBLIC_APP_ENV` (see `env.example`). Use the **mobile application token** for this platform's app in New Relic, not the browser license key. Set it as an EAS environment variable rather than committing it.
+
+- **Native module:** the agent needs native code, so it does not run in Expo Go. Use a development build (`eas build --profile development`, or `expo prebuild` and then `expo run:*`). Follow New Relic's React Native/Expo setup for the platform plugin (iOS pod, Android Gradle plugin) before the first native build. Without the module the app runs normally and logs a warning.
+- **Automatic:** native crashes, JS exceptions, unhandled promise rejections, HTTP timings.
+- **React errors:** `ErrorBoundary` in `@gnee/mobile-ui` reports to `recordError` and offers a retry.
+- **GraphQL and network errors:** `@gnee/api-client` reports failures (operation, code, status; no variables or tokens).
+- **Custom events** (`ZumaMobileAction`): `wallet_created`, `transaction_sent`. Screens can add their own with `useNewRelic()`.

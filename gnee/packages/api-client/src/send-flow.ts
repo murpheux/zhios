@@ -1,4 +1,5 @@
 import { describeZumaError } from "./errors";
+import { trackEvent } from "./error-tracking";
 import { createIdempotencyKey } from "./idempotency";
 import { type AmountUnit, convertAmountInput, parseAmountInput } from "./sats";
 import type { TransactionsApi } from "./transactions";
@@ -237,6 +238,7 @@ export function createSendFlow(options: SendFlowOptions): SendFlowController {
         result = tx;
         step = "success";
         update();
+        trackEvent("transaction_sent", { type: tx.type, status: tx.status });
         options.onSuccess?.(tx);
         return tx;
       } catch (err) {

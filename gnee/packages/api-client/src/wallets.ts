@@ -1,4 +1,5 @@
 import type { ZumaClient } from "./client";
+import { trackEvent } from "./error-tracking";
 import type {
   CreateWalletInput,
   ListWalletsParams,
@@ -63,7 +64,10 @@ export function createWalletsApi(client: ZumaClient) {
     create(input: CreateWalletInput) {
       return client
         .request<{ createWallet: Wallet }, { input: CreateWalletInput }>(CREATE_WALLET, { input })
-        .then((d) => d.createWallet);
+        .then((d) => {
+          trackEvent("wallet_created", { network: d.createWallet.network, type: d.createWallet.type });
+          return d.createWallet;
+        });
     },
     updateMetadata(id: string, input: UpdateWalletMetadataInput) {
       return client

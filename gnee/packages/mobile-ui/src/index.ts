@@ -4,3 +4,7 @@ export { ZumaMobileApp, resolveGatewayUrl } from "./ZumaMobileApp";
 export type { ZumaMobileAppProps } from "./ZumaMobileApp";
 export { RootNavigator } from "./navigation";
 export type { RootStackParamList } from "./navigation";
+export { ErrorBoundary } from "./components/ErrorBoundary";
+export { useNewRelic } from "./hooks/useNewRelic";
+export { initNewRelic, recordError, recordEvent, setNewRelicUser } from "./utils/newrelic";
+export type { NewRelicConfig } from "./utils/newrelic";

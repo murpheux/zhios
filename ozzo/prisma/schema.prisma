@@ -1,0 +1,42 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  checking
+  savings
+}
+
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  username     String        @unique
+  email        String        @unique
+  firstName    String        @map("first_name")
+  lastName     String        @map("last_name")
+  externalId   String        @unique @map("external_id") // Okta user id (JWT sub)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  bankAccounts BankAccount[]
+
+  @@map("users")
+}
+
+model BankAccount {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @map("user_id") @db.Uuid
+  accountNumber String      @unique @map("account_number")
+  accountType   AccountType @map("account_type")
+  balance       BigInt      @default(0) // integer cents/satoshis
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("bank_accounts")
+}

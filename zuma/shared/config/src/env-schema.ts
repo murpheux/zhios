@@ -45,6 +45,19 @@ export const baseEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  // Rotating file output (pino-roll): daily, and when a file reaches LOG_FILE_MAX_SIZE bytes.
+  LOG_TO_FILE: boolFlag(false),
+  LOG_FILE_PATH: z.string().min(1).default('./logs'),
+  LOG_FILE_MAX_SIZE: z.coerce.number().int().positive().default(10_485_760),
+  LOG_FILE_ROTATE_DAYS: z.coerce.number().int().positive().default(7),
+  // New Relic APM. The agent itself reads NEW_RELIC_* from process.env (see initNewRelic); these
+  // entries validate them. NEW_RELIC_APP_NAME defaults to the service name.
+  NEW_RELIC_ENABLED: boolFlag(false),
+  NEW_RELIC_LICENSE_KEY: z.string().min(1).optional(),
+  NEW_RELIC_APP_NAME: z.string().min(1).optional(),
+  NEW_RELIC_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  // Forward application logs to New Relic (agent log forwarding + trace decorating).
+  NEWRELIC_LOGS_ENABLED: boolFlag(false),
   MONGODB_URI: z.string().min(1),
   JWT_SECRET: z.string().min(16),
   JWT_ISSUER: z.string().default('zuma'),

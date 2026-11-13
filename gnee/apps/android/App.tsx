@@ -10,11 +10,25 @@ const GATEWAY_URL = resolveGatewayUrl(
   "http://10.0.2.2:3003/graphql"
 );
 
+const NEWRELIC = {
+  enabled: process.env.EXPO_PUBLIC_NEWRELIC_ENABLED === "true",
+  appToken: process.env.EXPO_PUBLIC_NEWRELIC_APP_TOKEN,
+  environment: process.env.EXPO_PUBLIC_APP_ENV,
+  version: Constants.expoConfig?.version,
+};
+
 const getToken = () => SecureStore.getItemAsync("zuma_jwt");
 // Hermes has no global crypto; expo-crypto supplies a CSPRNG-backed UUID for Idempotency-Key.
 const createIdempotencyKey = () => Crypto.randomUUID();
 
 /** apps/android entry point — Android (10.0.2.2 = host loopback from the emulator). Everything else lives in @gnee/mobile-ui. */
 export default function App() {
-  return <ZumaMobileApp gatewayUrl={GATEWAY_URL} getToken={getToken} createIdempotencyKey={createIdempotencyKey} />;
+  return (
+    <ZumaMobileApp
+      gatewayUrl={GATEWAY_URL}
+      getToken={getToken}
+      createIdempotencyKey={createIdempotencyKey}
+      newRelic={NEWRELIC}
+    />
+  );
 }

@@ -1,0 +1,70 @@
+# Usage: cp env.example .env && edit secrets, then from ozzo/:
+#   docker compose -f docker/docker-compose.yml --env-file .env up -d --build
+services:
+  ozzo:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ozzo:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3004}:${PORT:-3004}"
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3004}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ozzo}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-ozzo}?schema=public
+      REDIS_URL: redis://redis:6379
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+      OKTA_ISSUER_BASE_URL: ${OKTA_ISSUER_BASE_URL:?set OKTA_ISSUER_BASE_URL in .env}
+      OKTA_AUDIENCE: ${OKTA_AUDIENCE:?set OKTA_AUDIENCE in .env}
+      ADMIN_GROUP: ${ADMIN_GROUP:-ozzo-admin}
+      WALLET_SERVICE_URL: ${WALLET_SERVICE_URL:-http://host.docker.internal:3001}
+      WALLET_SERVICE_NAME: ${WALLET_SERVICE_NAME:-wallet-service}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-}
+      INTERNAL_JWT_ISSUER: ${INTERNAL_JWT_ISSUER:-ozzo}
+      USE_MOCK_ZUMA: ${USE_MOCK_ZUMA:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [ozzo]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ozzo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-ozzo}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ozzo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [ozzo]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [ozzo]
+
+volumes:
+  ozzo-pgdata:
+
+networks:
+  ozzo:

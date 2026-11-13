@@ -4,7 +4,8 @@
       "Bash(ls ~/.openclaw 2>&1 | head -30; ls /tmp/openclaw ~/.openclaw/logs 2>&1 | head)",
       "Bash(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 horus 'uname -a; whoami; which openclaw; openclaw --version 2>&1 | head -3; \\(systemctl --user list-units 2>/dev/null | grep -i openclaw\\); \\(systemctl list-units 2>/dev/null | grep -i openclaw\\); \\(launchctl list 2>/dev/null | grep -i openclaw\\); \\(docker ps --format \"{{.Names}} {{.Image}}\" 2>/dev/null | grep -i openclaw\\); \\(pm2 ls 2>/dev/null | head -5\\); pgrep -fl openclaw | cut -c1-160 | head')",
       "Bash(grep -i -B1 -A5 -E '^\\\\s*Host\\\\s+.*\\(horus|10\\\\.10\\\\.2\\\\.11\\)' ~/.ssh/config | grep -iE 'Host|HostName|User' | head)",
-      "Bash(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 _ai_daemon@10.10.2.11 'uname -a; whoami; which openclaw; openclaw --version 2>&1 | head -3')"
+      "Bash(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 _ai_daemon@10.10.2.11 'uname -a; whoami; which openclaw; openclaw --version 2>&1 | head -3')",
+      "WebSearch"
     ]
   }
 }

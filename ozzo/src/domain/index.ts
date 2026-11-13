@@ -1,3 +1,4 @@
+export * from './address';
 export * from './bank-account';
 export * from './errors';
 export * from './user';

@@ -1,0 +1,1040 @@
+openapi: 3.1.0
+info:
+  title: ozzo API
+  description: Subscription account management - users, bank accounts, wallet sync
+  version: 0.1.0
+servers:
+  - url: http://localhost:3004
+    description: Local development server
+  - url: https://ozzo.example.com
+    description: Production server
+tags:
+  - name: users
+    description: User management operations
+  - name: accounts
+    description: Bank account operations
+  - name: wallet
+    description: Wallet synchronization
+  - name: ops
+    description: Operational endpoints (health, readiness)
+
+paths:
+  /healthz:
+    get:
+      tags:
+        - ops
+      summary: Health check
+      description: Simple health check endpoint to verify the service is running
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                    example: ok
+
+  /readyz:
+    get:
+      tags:
+        - ops
+      summary: Readiness check
+      description: Readiness probe for load balancers and orchestration systems. Returns 503 if any dependency check fails.
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - checks
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ready
+                      - unready
+                    example: ready
+                  checks:
+                    type: object
+                    example:
+                      database: ok
+                      cache: ok
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - checks
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - unready
+                  checks:
+                    type: object
+
+  /users:
+    post:
+      tags:
+        - users
+      summary: Register the authenticated Okta identity as a user
+      description: Create a new user account with profile information and address data
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}:
+    get:
+      tags:
+        - users
+      summary: Get a user
+      description: Retrieve user information by ID
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - users
+      summary: Update a user
+      description: Update user profile information
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/profile:
+    get:
+      tags:
+        - users
+      summary: Get a user with bank accounts and total balance
+      description: Retrieve complete user profile including addresses, next of kin, contact person, and linked bank accounts
+      operationId: getUserProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User profile with accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/accounts:
+    post:
+      tags:
+        - accounts
+      summary: Link a bank account to a user
+      description: Create and link a new bank account (checking or savings)
+      operationId: linkBankAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkBankAccountRequest'
+      responses:
+        '201':
+          description: Account linked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccount'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags:
+        - accounts
+      summary: List a user's bank accounts
+      description: Retrieve all bank accounts associated with a user
+      operationId: listBankAccounts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of bank accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BankAccount'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/accounts/{accountId}:
+    get:
+      tags:
+        - accounts
+      summary: Get a bank account
+      description: Retrieve details of a specific bank account
+      operationId: getBankAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: accountId
+          in: path
+          required: true
+          description: Bank account ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Bank account found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccount'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - accounts
+      summary: Update a bank account (account type only)
+      description: Update account type (checking → savings or vice versa). Balance is read-only.
+      operationId: updateBankAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: accountId
+          in: path
+          required: true
+          description: Bank account ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBankAccountRequest'
+      responses:
+        '200':
+          description: Account updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccount'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - accounts
+      summary: Close a bank account
+      description: Delete/close a bank account. Account balance must be zero.
+      operationId: deleteBankAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: accountId
+          in: path
+          required: true
+          description: Bank account ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Account deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Account not empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/wallet:
+    get:
+      tags:
+        - wallet
+      summary: Sync the user's wallets from zuma wallet-service
+      description: Retrieve and cache wallet information from the zuma wallet service. Results are cached in Redis with a configurable TTL.
+      operationId: syncWallets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Wallet sync result (from cache or live fetch)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletSync'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Failed to fetch wallets from zuma
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Okta access token (JWT)
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code (e.g., 'VALIDATION_ERROR', 'NOT_FOUND', 'UNAUTHORIZED')
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable error message
+              example: Invalid email address
+            details:
+              type: object
+              description: Additional error details
+              example:
+                field: email
+                reason: format invalid
+
+    Address:
+      type: object
+      required:
+        - street
+        - city
+        - state
+        - country
+        - postalCode
+        - region
+      properties:
+        street:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Street address
+          example: 123 Main Street
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: City name
+          example: New York
+        state:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: State or province
+          example: NY
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: ISO 3166-1 alpha-2 country code
+          example: US
+        postalCode:
+          type: string
+          minLength: 3
+          maxLength: 20
+          description: Postal/ZIP code (format varies by region)
+          example: '10001'
+        region:
+          type: string
+          enum:
+            - US
+            - CA
+            - UK
+          description: Region (used for SIN/SSN validation and postal code formatting)
+          example: US
+
+    NextOfKin:
+      type: object
+      required:
+        - name
+        - relationship
+        - phone
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Full name of next of kin
+          example: Jane Doe
+        relationship:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Relationship to user
+          example: Spouse
+        phone:
+          type: string
+          minLength: 10
+          maxLength: 20
+          description: Contact phone number
+          example: '+1-555-123-4567'
+
+    ContactPerson:
+      type: object
+      required:
+        - name
+        - title
+        - email
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Full name of contact person
+          example: John Smith
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Job title or role
+          example: Account Manager
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Email address
+          example: john.smith@example.com
+
+    User:
+      type: object
+      required:
+        - id
+        - username
+        - email
+        - firstName
+        - lastName
+        - externalId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[a-zA-Z0-9._-]{3,32}$'
+          description: Unique username
+          example: john.doe
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Email address
+          example: john@example.com
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: First name
+          example: John
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Last name
+          example: Doe
+        externalId:
+          type: string
+          description: Okta user ID (from JWT sub)
+          example: okta-user-12345
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 creation timestamp
+          example: '2026-11-13T10:30:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 last update timestamp
+          example: '2026-11-13T10:30:00Z'
+
+    UserProfile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          required:
+            - dateOfBirth
+            - sex
+            - address
+            - nextOfKin
+            - contactPerson
+            - accounts
+            - totalBalance
+          properties:
+            dateOfBirth:
+              type: string
+              format: date
+              description: Date of birth (YYYY-MM-DD)
+              example: '1990-01-15'
+            sex:
+              type: string
+              enum:
+                - male
+                - female
+                - won't-declare
+              description: Biological sex or gender identity
+              example: male
+            address:
+              $ref: '#/components/schemas/Address'
+            nextOfKin:
+              $ref: '#/components/schemas/NextOfKin'
+            contactPerson:
+              $ref: '#/components/schemas/ContactPerson'
+            accounts:
+              type: array
+              description: Linked bank accounts
+              items:
+                $ref: '#/components/schemas/BankAccount'
+            totalBalance:
+              type: string
+              pattern: '^[0-9]+$'
+              description: Sum of all account balances (integer satoshis/cents)
+              example: '50000'
+
+    CreateUserRequest:
+      type: object
+      required:
+        - username
+        - email
+        - firstName
+        - lastName
+        - dateOfBirth
+        - sex
+        - address
+        - nextOfKin
+        - contactPerson
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[a-zA-Z0-9._-]{3,32}$'
+          description: Unique username
+          example: john.doe
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Email address
+          example: john@example.com
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: First name
+          example: John
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Last name
+          example: Doe
+        dateOfBirth:
+          type: string
+          format: date
+          description: Date of birth (YYYY-MM-DD)
+          example: '1990-01-15'
+        sex:
+          type: string
+          enum:
+            - male
+            - female
+            - won't-declare
+          description: Biological sex or gender identity
+          example: male
+        address:
+          $ref: '#/components/schemas/Address'
+        nextOfKin:
+          $ref: '#/components/schemas/NextOfKin'
+        contactPerson:
+          $ref: '#/components/schemas/ContactPerson'
+        sinSsn:
+          type: string
+          description: 'SIN (Canada), SSN (US), or NINO (UK). Stored encrypted in KMS, never returned in responses. Optional.'
+          example: '123-45-6789'
+
+    UpdateUserRequest:
+      type: object
+      minProperties: 1
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[a-zA-Z0-9._-]{3,32}$'
+          description: Unique username
+          example: john.doe
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Email address
+          example: john@example.com
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: First name
+          example: John
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Last name
+          example: Doe
+        dateOfBirth:
+          type: string
+          format: date
+          description: Date of birth (YYYY-MM-DD)
+          example: '1990-01-15'
+        sex:
+          type: string
+          enum:
+            - male
+            - female
+            - won't-declare
+          description: Biological sex or gender identity
+          example: male
+        address:
+          $ref: '#/components/schemas/Address'
+        nextOfKin:
+          $ref: '#/components/schemas/NextOfKin'
+        contactPerson:
+          $ref: '#/components/schemas/ContactPerson'
+        sinSsn:
+          type: string
+          description: 'SIN (Canada), SSN (US), or NINO (UK). Stored encrypted in KMS, never returned. Optional.'
+          example: '123-45-6789'
+
+    BankAccount:
+      type: object
+      required:
+        - id
+        - userId
+        - accountNumber
+        - accountType
+        - balance
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Bank account ID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        userId:
+          type: string
+          format: uuid
+          description: User ID (owner)
+          example: 550e8400-e29b-41d4-a716-446655440000
+        accountNumber:
+          type: string
+          pattern: '^\d{8,17}$'
+          description: Account number (8-17 digits). Generated if omitted.
+          example: '12345678'
+        accountType:
+          type: string
+          enum:
+            - checking
+            - savings
+          description: Account type
+          example: checking
+        balance:
+          type: string
+          pattern: '^\d+$'
+          description: Account balance in minor units (cents/satoshis). Integer string.
+          example: '100000'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 creation timestamp
+          example: '2026-11-13T10:30:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 last update timestamp
+          example: '2026-11-13T10:30:00Z'
+
+    LinkBankAccountRequest:
+      type: object
+      required:
+        - accountType
+      properties:
+        accountType:
+          type: string
+          enum:
+            - checking
+            - savings
+          description: Account type
+          example: checking
+        accountNumber:
+          type: string
+          pattern: '^\d{8,17}$'
+          description: Account number (8-17 digits). Generated if omitted.
+          example: '12345678'
+
+    UpdateBankAccountRequest:
+      type: object
+      required:
+        - accountType
+      properties:
+        accountType:
+          type: string
+          enum:
+            - checking
+            - savings
+          description: Updated account type
+          example: savings
+
+    WalletSync:
+      type: object
+      required:
+        - userId
+        - wallets
+        - fetchedAt
+        - cached
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: User ID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        wallets:
+          type: array
+          description: Array of wallets from zuma wallet-service
+          items:
+            type: object
+            description: Wallet object (structure depends on zuma service)
+        fetchedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when wallets were fetched
+          example: '2026-11-13T10:30:00Z'
+        cached:
+          type: boolean
+          description: True if result was served from Redis cache within TTL
+          example: false

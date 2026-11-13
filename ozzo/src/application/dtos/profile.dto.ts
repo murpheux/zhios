@@ -1,8 +1,9 @@
 import type { BankAccountDto } from './bank-account.dto';
+import type { UserProfileFieldsDto } from './profile-fields.dto';
 import type { UserDto } from './user.dto';
 import type { ZumaWallet } from '../ports/zuma-client';
 
-export interface UserProfileDto extends UserDto {
+export interface UserProfileDto extends UserDto, UserProfileFieldsDto {
   accounts: BankAccountDto[];
   totalBalance: string;
 }

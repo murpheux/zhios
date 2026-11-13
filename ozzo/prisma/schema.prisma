@@ -14,15 +14,21 @@ enum AccountType {
 }
 
 model User {
-  id           String        @id @default(uuid()) @db.Uuid
-  username     String        @unique
-  email        String        @unique
-  firstName    String        @map("first_name")
-  lastName     String        @map("last_name")
-  externalId   String        @unique @map("external_id") // Okta user id (JWT sub)
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  bankAccounts BankAccount[]
+  id             String        @id @default(uuid()) @db.Uuid
+  username       String        @unique
+  email          String        @unique
+  firstName      String        @map("first_name")
+  lastName       String        @map("last_name")
+  externalId     String        @unique @map("external_id") // Okta user id (JWT sub)
+  address        Json?
+  dateOfBirth    DateTime?     @map("date_of_birth") @db.Date
+  nextOfKin      Json?         @map("next_of_kin")
+  contactPerson  Json?         @map("contact_person")
+  sex            String?
+  encryptedTaxId String?       @map("encrypted_tax_id") // SIN/SSN ciphertext (KMS); never plaintext
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  bankAccounts   BankAccount[]
 
   @@map("users")
 }

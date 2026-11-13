@@ -8,7 +8,7 @@ import { createContext } from './support';
 describe('SyncWalletUseCase', () => {
   it('fetches from zuma once, then serves from cache within the TTL', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const uc = new SyncWalletUseCase(ctx.access, ctx.cache, ctx.zuma);
 
     const first = await uc.execute(user.id, ownerActor);
@@ -26,7 +26,7 @@ describe('SyncWalletUseCase', () => {
     const ctx = createContext(300);
     const cache = new InMemoryCache(() => now);
     const access = { ...ctx.access, cache };
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const uc = new SyncWalletUseCase(access, cache, ctx.zuma);
 
     await uc.execute(user.id, ownerActor);
@@ -39,7 +39,7 @@ describe('SyncWalletUseCase', () => {
 
   it('checks ownership before touching cache or zuma', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const uc = new SyncWalletUseCase(ctx.access, ctx.cache, ctx.zuma);
     await expect(uc.execute(user.id, otherActor)).rejects.toBeInstanceOf(ForbiddenError);
     expect(ctx.zuma.calls).toBe(0);
@@ -47,7 +47,7 @@ describe('SyncWalletUseCase', () => {
 
   it('propagates upstream failures without caching them', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const failing: ZumaClient = {
       listWalletsByOwner: jest.fn().mockRejectedValue(new UpstreamError('down')),
     };

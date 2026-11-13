@@ -12,7 +12,7 @@ import { createContext } from './support';
 
 async function setup() {
   const ctx = createContext();
-  const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+  const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
   let counter = 10_000_000;
   const numbers = { generate: () => String(++counter) };
   const link = new LinkBankAccountUseCase(ctx.access, ctx.accounts, numbers);
@@ -74,7 +74,7 @@ describe('bank account use-cases', () => {
   it('404s when the account belongs to a different user', async () => {
     const ctx = await setup();
     const acc = await ctx.link.execute(ctx.user.id, { accountType: 'checking' }, ownerActor);
-    const other = await new CreateUserUseCase(ctx.users).execute(
+    const other = await new CreateUserUseCase(ctx.users, ctx.kms).execute(
       { username: 'bob.s', email: 'bob@example.com', firstName: 'Bob', lastName: 'S' },
       otherActor,
     );

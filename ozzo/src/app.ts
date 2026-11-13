@@ -10,6 +10,7 @@ import type {
   AccountNumberGenerator,
   BankAccountRepository,
   CachePort,
+  SensitiveDataPort,
   TokenVerifier,
   UserRepository,
   ZumaClient,
@@ -32,6 +33,7 @@ export interface AppDeps {
   users: UserRepository;
   accounts: BankAccountRepository;
   cache: CachePort;
+  sensitiveData: SensitiveDataPort;
   zuma: ZumaClient;
   verifier: TokenVerifier;
   accountNumbers: AccountNumberGenerator;
@@ -41,7 +43,7 @@ export interface AppDeps {
   shutdown?: () => Promise<void>;
 }
 
-const CORE_DEPS: (keyof AppDeps)[] = ['users', 'accounts', 'cache', 'zuma', 'verifier', 'accountNumbers'];
+const CORE_DEPS: (keyof AppDeps)[] = ['users', 'accounts', 'cache', 'sensitiveData', 'zuma', 'verifier', 'accountNumbers'];
 
 /** Composition root. Pass overrides (all core deps) in tests; production adapters are built otherwise. */
 export async function buildApp(
@@ -82,10 +84,10 @@ export async function buildApp(
     secured.addHook('onRequest', createAuthHook(deps.verifier, config.okta.adminGroup));
 
     await secured.register(userRoutes, {
-      createUser: new CreateUserUseCase(deps.users),
+      createUser: new CreateUserUseCase(deps.users, deps.sensitiveData),
       getUser: new GetUserUseCase(access),
       fetchProfile: new FetchUserProfileUseCase(access, deps.accounts),
-      updateUser: new UpdateUserUseCase(access, deps.users),
+      updateUser: new UpdateUserUseCase(access, deps.users, deps.sensitiveData),
     });
     await secured.register(accountRoutes, {
       linkAccount: new LinkBankAccountUseCase(access, deps.accounts, deps.accountNumbers),

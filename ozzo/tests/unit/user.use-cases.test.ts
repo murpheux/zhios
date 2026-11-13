@@ -10,16 +10,16 @@ import { createContext } from './support';
 
 describe('user use-cases', () => {
   it('creates a user, normalizing email and taking externalId from the actor', async () => {
-    const { users } = createContext();
-    const dto = await new CreateUserUseCase(users).execute(validUser, ownerActor);
+    const { users, kms } = createContext();
+    const dto = await new CreateUserUseCase(users, kms).execute(validUser, ownerActor);
     expect(dto.email).toBe('jane.doe@example.com');
     expect(dto.externalId).toBe(ownerActor.sub);
   });
 
   it('rejects unknown fields (cannot spoof externalId)', async () => {
-    const { users } = createContext();
+    const { users, kms } = createContext();
     await expect(
-      new CreateUserUseCase(users).execute({ ...validUser, externalId: 'x' }, ownerActor),
+      new CreateUserUseCase(users, kms).execute({ ...validUser, externalId: 'x' }, ownerActor),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -28,15 +28,15 @@ describe('user use-cases', () => {
     ['short username', { username: 'ab' }],
     ['blank first name', { firstName: '   ' }],
   ])('rejects %s', async (_name, override) => {
-    const { users } = createContext();
+    const { users, kms } = createContext();
     await expect(
-      new CreateUserUseCase(users).execute({ ...validUser, ...override }, ownerActor),
+      new CreateUserUseCase(users, kms).execute({ ...validUser, ...override }, ownerActor),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('rejects double registration of the same identity', async () => {
-    const { users } = createContext();
-    const uc = new CreateUserUseCase(users);
+    const { users, kms } = createContext();
+    const uc = new CreateUserUseCase(users, kms);
     await uc.execute(validUser, ownerActor);
     await expect(
       uc.execute({ ...validUser, username: 'other', email: 'o@example.com' }, ownerActor),
@@ -45,7 +45,7 @@ describe('user use-cases', () => {
 
   it('serves repeated lookups from cache', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const get = new GetUserUseCase(ctx.access);
     await get.execute(user.id, ownerActor);
     await get.execute(user.id, ownerActor);
@@ -54,7 +54,7 @@ describe('user use-cases', () => {
 
   it('enforces ownership, even on cache hits, but lets admins read', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const get = new GetUserUseCase(ctx.access);
     await get.execute(user.id, ownerActor);
     await expect(get.execute(user.id, otherActor)).rejects.toBeInstanceOf(ForbiddenError);
@@ -70,24 +70,24 @@ describe('user use-cases', () => {
 
   it('update invalidates the user cache', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const get = new GetUserUseCase(ctx.access);
     await get.execute(user.id, ownerActor);
-    await new UpdateUserUseCase(ctx.access, ctx.users).execute(user.id, { firstName: 'Janet' }, ownerActor);
+    await new UpdateUserUseCase(ctx.access, ctx.users, ctx.kms).execute(user.id, { firstName: 'Janet' }, ownerActor);
     expect((await get.execute(user.id, ownerActor)).firstName).toBe('Janet');
   });
 
   it('rejects empty updates', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     await expect(
-      new UpdateUserUseCase(ctx.access, ctx.users).execute(user.id, {}, ownerActor),
+      new UpdateUserUseCase(ctx.access, ctx.users, ctx.kms).execute(user.id, {}, ownerActor),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('profile sums balances across accounts', async () => {
     const ctx = createContext();
-    const user = await new CreateUserUseCase(ctx.users).execute(validUser, ownerActor);
+    const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     for (const [n, balance] of [['11111111', 9007199254740993n], ['22222222', 7n]] as const) {
       const acc = await ctx.accounts.create({
         userId: user.id,

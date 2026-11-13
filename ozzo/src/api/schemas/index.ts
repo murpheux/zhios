@@ -43,6 +43,74 @@ export const userSchema = {
   },
 } as const;
 
+export const addressSchema = {
+  type: 'object',
+  required: ['street', 'city', 'stateProvince', 'country', 'postalCode'],
+  additionalProperties: false,
+  properties: {
+    street: { type: 'string', minLength: 1, maxLength: 100 },
+    city: { type: 'string', minLength: 1, maxLength: 100 },
+    stateProvince: { type: 'string', minLength: 1, maxLength: 100, description: 'US state / CA province code; UK county' },
+    country: { type: 'string', enum: ['US', 'CA', 'UK'] },
+    postalCode: { type: 'string', minLength: 1, maxLength: 12, description: 'Format validated per country' },
+  },
+} as const;
+
+const nextOfKinSchema = {
+  type: 'object',
+  required: ['fullName', 'relationship'],
+  additionalProperties: false,
+  properties: {
+    fullName: { type: 'string', minLength: 1, maxLength: 100 },
+    relationship: { type: 'string', minLength: 1, maxLength: 100 },
+    phone: { type: 'string', maxLength: 20 },
+    email: { type: 'string', maxLength: 254 },
+  },
+} as const;
+
+const contactPersonSchema = {
+  type: 'object',
+  required: ['fullName', 'phone'],
+  additionalProperties: false,
+  properties: {
+    fullName: { type: 'string', minLength: 1, maxLength: 100 },
+    phone: { type: 'string', maxLength: 20 },
+    email: { type: 'string', maxLength: 254 },
+  },
+} as const;
+
+const sexSchema = { type: 'string', enum: ['male', 'female', "won't-declare"] } as const;
+const dateOfBirthSchema = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'YYYY-MM-DD' } as const;
+
+/** Request-only: SIN (CA) / SSN (US). Encrypted via KMS; never present in any response schema. */
+const taxIdRequestSchema = {
+  type: 'string',
+  minLength: 9,
+  maxLength: 11,
+  description: 'SIN/SSN, write-only; requires an address with country US or CA',
+} as const;
+
+const profileRequestProperties = {
+  address: addressSchema,
+  dateOfBirth: dateOfBirthSchema,
+  nextOfKin: nextOfKinSchema,
+  contactPerson: contactPersonSchema,
+  sex: sexSchema,
+  taxId: taxIdRequestSchema,
+} as const;
+
+export const userProfilePayloadSchema = {
+  ...userSchema,
+  properties: {
+    ...userSchema.properties,
+    address: { ...addressSchema, nullable: true },
+    dateOfBirth: { ...dateOfBirthSchema, nullable: true },
+    nextOfKin: { ...nextOfKinSchema, nullable: true },
+    contactPerson: { ...contactPersonSchema, nullable: true },
+    sex: { ...sexSchema, nullable: true },
+  },
+} as const;
+
 export const bankAccountSchema = {
   type: 'object',
   required: ['id', 'userId', 'accountNumber', 'accountType', 'balance', 'createdAt', 'updatedAt'],
@@ -59,9 +127,9 @@ export const bankAccountSchema = {
 
 const profileSchema = {
   type: 'object',
-  required: [...userSchema.required, 'accounts', 'totalBalance'],
+  required: [...userProfilePayloadSchema.required, 'accounts', 'totalBalance'],
   properties: {
-    ...userSchema.properties,
+    ...userProfilePayloadSchema.properties,
     accounts: { type: 'array', items: bankAccountSchema },
     totalBalance: { type: 'string', pattern: '^\\d+$' },
   },
@@ -108,9 +176,10 @@ export const createUserSchema = {
       email: { type: 'string', maxLength: 254 },
       firstName: { type: 'string', minLength: 1, maxLength: 100 },
       lastName: { type: 'string', minLength: 1, maxLength: 100 },
+      ...profileRequestProperties,
     },
   },
-  response: { 201: userSchema, ...errorResponses },
+  response: { 201: userProfilePayloadSchema, ...errorResponses },
 } as const;
 
 export const getUserSchema = {
@@ -118,7 +187,7 @@ export const getUserSchema = {
   tags: ['users'],
   summary: 'Get a user',
   params: idParams,
-  response: { 200: userSchema, ...errorResponses },
+  response: { 200: userProfilePayloadSchema, ...errorResponses },
 } as const;
 
 export const getProfileSchema = {
@@ -143,9 +212,10 @@ export const updateUserSchema = {
       email: { type: 'string', maxLength: 254 },
       firstName: { type: 'string', minLength: 1, maxLength: 100 },
       lastName: { type: 'string', minLength: 1, maxLength: 100 },
+      ...profileRequestProperties,
     },
   },
-  response: { 200: userSchema, ...errorResponses },
+  response: { 200: userProfilePayloadSchema, ...errorResponses },
 } as const;
 
 export const linkAccountSchema = {

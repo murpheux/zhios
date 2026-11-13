@@ -4,6 +4,7 @@ import type { AppDeps } from '../app';
 import type { AppConfig } from '../config';
 import { CryptoAccountNumberGenerator } from './crypto-account-number-generator';
 import { HttpZumaClient } from './http-zuma-client';
+import { MockKmsAdapter } from './mock-kms.adapter';
 import { MockZumaClient } from './mock-zuma-client';
 import { OktaTokenVerifier } from './okta-token-verifier';
 import { createPrismaClient } from './prisma-client';
@@ -30,6 +31,8 @@ export function createDefaultDeps(config: AppConfig, logger: Logger): Required<A
     users: new PrismaUserRepository(prisma),
     accounts: new PrismaBankAccountRepository(prisma),
     cache: new RedisCache(redis, logger),
+    // Throws in NODE_ENV=production: swap in a real KMS adapter before deploying.
+    sensitiveData: new MockKmsAdapter(config.env),
     zuma: config.zuma.useMock
       ? new MockZumaClient()
       : new HttpZumaClient({

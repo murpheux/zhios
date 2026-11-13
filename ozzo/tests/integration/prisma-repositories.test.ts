@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { ConflictError } from '../../src/domain';
+import { ConflictError, type NewUser } from '../../src/domain';
 import { PrismaBankAccountRepository } from '../../src/infrastructure/prisma-bank-account.repository';
 import { PrismaUserRepository } from '../../src/infrastructure/prisma-user.repository';
 
@@ -19,12 +19,18 @@ suite('Prisma repositories (real PostgreSQL)', () => {
   });
   afterAll(() => prisma.$disconnect());
 
-  const newUser = (n = 1) => ({
+  const newUser = (n = 1): NewUser => ({
     username: `user${n}`,
     email: `user${n}@example.com`,
     firstName: 'Test',
     lastName: 'User',
     externalId: `00u-${n}`,
+    address: null,
+    dateOfBirth: null,
+    nextOfKin: null,
+    contactPerson: null,
+    sex: null,
+    encryptedTaxId: null,
   });
 
   it('creates and finds users; unique violations become ConflictError', async () => {
@@ -32,6 +38,20 @@ suite('Prisma repositories (real PostgreSQL)', () => {
     expect((await users.findById(u.id))?.username).toBe('user1');
     expect((await users.findByExternalId('00u-1'))?.id).toBe(u.id);
     await expect(users.create(newUser())).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('round-trips profile fields and JSON columns', async () => {
+    const u = await users.create({
+      ...newUser(),
+      address: { street: '1 Main St', city: 'Calgary', stateProvince: 'AB', country: 'CA', postalCode: 'T2P 1J9' },
+      dateOfBirth: new Date('1990-02-03T00:00:00Z'),
+      sex: "won't-declare",
+      encryptedTaxId: 'ciphertext',
+    });
+    const found = await users.findById(u.id);
+    expect(found?.address?.postalCode).toBe('T2P 1J9');
+    expect(found?.dateOfBirth?.toISOString().slice(0, 10)).toBe('1990-02-03');
+    expect(found?.encryptedTaxId).toBe('ciphertext');
   });
 
   it('stores balances as bigint and cascades deletes', async () => {

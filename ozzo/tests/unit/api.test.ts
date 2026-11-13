@@ -5,6 +5,7 @@ import type { TokenVerifier } from '../../src/application/ports';
 import type { AppConfig } from '../../src/config';
 import { UnauthorizedError } from '../../src/domain';
 import { InMemoryCache } from '../../src/infrastructure/in-memory-cache';
+import { MockKmsAdapter } from '../../src/infrastructure/mock-kms.adapter';
 import { MockZumaClient } from '../../src/infrastructure/mock-zuma-client';
 import { OWNER_SUB, validUser } from '../fixtures/data';
 import { InMemoryBankAccountRepository, InMemoryUserRepository } from '../fixtures/in-memory-repositories';
@@ -45,6 +46,7 @@ describe('HTTP API', () => {
       users: new InMemoryUserRepository(),
       accounts: new InMemoryBankAccountRepository(),
       cache: new InMemoryCache(),
+      sensitiveData: new MockKmsAdapter('test'),
       zuma,
       verifier,
       accountNumbers: { generate: () => String(Math.floor(1e11 + Math.random() * 9e11)) },

@@ -1,0 +1,668 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "name": "yone Notification Service",
+    "description": "Service-to-service notification gateway: email, SMS, Slack, Teams.\n\nAll notification endpoints require x-service-token authentication. The collection's pre-request script mints service tokens (HS256) signed with internalJwtSecret. See environment variables below.\n\nRun requests in order or individually; the collection stores tokens and generated IDs in collection variables for chaining.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// yone collection pre-request: mints/refreshes service token before requests that need authentication.",
+          "// Variables come from the environment; tokens go to collection variables.",
+          "const cv = pm.collectionVariables;",
+          "const v = function (k, d) {",
+          "  const x = pm.variables.get(k);",
+          "  return x === undefined || x === null || x === '' ? (d === undefined ? '' : d) : String(x);",
+          "};",
+          "const now = Math.floor(Date.now() / 1000);",
+          "const ttl = Math.min(Math.max(parseInt(v('internalJwtTtlSeconds', '300'), 10) || 300, 30), 3600);",
+          "",
+          "const b64url = function (wordArray) {",
+          "  return CryptoJS.enc.Base64.stringify(wordArray).replace(/=+$/, '').replace(/\\+/g, '-').replace(/\\//g, '_');",
+          "};",
+          "const segment = function (obj) { return b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(obj))); };",
+          "const signHs256 = function (claims, secret, header) {",
+          "  const input = segment(header || { alg: 'HS256', typ: 'JWT' }) + '.' + segment(claims);",
+          "  return input + '.' + b64url(CryptoJS.HmacSHA256(input, secret));",
+          "};",
+          "",
+          "const internalJwtSecret = v('internalJwtSecret');",
+          "if (!internalJwtSecret) {",
+          "  console.warn('[yone] internalJwtSecret is empty: service tokens not minted (requests will get 401)');",
+          "} else {",
+          "  const serviceTokenClaims = {",
+          "    sub: v('serviceTokenSub', 'wallet-service'),",
+          "    aud: v('serviceTokenAudience', 'yone'),",
+          "    role: 'service',",
+          "    iss: v('internalJwtIssuer', 'zhios'),",
+          "    iat: now,",
+          "    exp: now + ttl",
+          "  };",
+          "  cv.set('serviceToken', signHs256(serviceTokenClaims, internalJwtSecret));",
+          "  cv.set('serviceTokenExp', now + ttl);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Readiness",
+      "description": "Liveness and readiness probes for orchestration and monitoring.",
+      "item": [
+        {
+          "name": "GET /healthz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response is {status: ok}', function () { pm.expect(pm.response.json()).to.eql({ status: 'ok' }); });",
+                  "pm.test('Probe is not rate limited', function () { pm.expect(pm.response.headers.has('x-ratelimit-limit')).to.be.false; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{yoneUrl}}/healthz",
+              "host": ["{{yoneUrl}}"],
+              "path": ["healthz"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /readyz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response is {status: ok}', function () { pm.expect(pm.response.json()).to.eql({ status: 'ok' }); });",
+                  "pm.test('Probe is not rate limited', function () { pm.expect(pm.response.headers.has('x-ratelimit-limit')).to.be.false; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{yoneUrl}}/readyz",
+              "host": ["{{yoneUrl}}"],
+              "path": ["readyz"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Email Notifications",
+      "description": "Send emails via SendGrid provider.",
+      "item": [
+        {
+          "name": "POST /email (basic)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=email', function () { pm.expect(pm.response.json().channel).to.equal('email'); });",
+                  "pm.test('Response has status=accepted', function () { pm.expect(pm.response.json().status).to.equal('accepted'); });",
+                  "pm.test('Response may include providerMessageId', function () { const r = pm.response.json(); pm.expect(r).to.have.property('providerMessageId').or.not.have.property('providerMessageId'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": [\"recipient@example.com\"],\n  \"subject\": \"Test Email\",\n  \"text\": \"This is a test email.\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/email",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "email"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /email (with HTML)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=email', function () { pm.expect(pm.response.json().channel).to.equal('email'); });",
+                  "pm.test('Response has status=accepted', function () { pm.expect(pm.response.json().status).to.equal('accepted'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": [\"recipient@example.com\", \"another@example.com\"],\n  \"subject\": \"Test Email with HTML\",\n  \"html\": \"<p>This is a <strong>test email</strong> with HTML formatting.</p>\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/email",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "email"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /email (missing subject - should fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 Validation Error', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Code is VALIDATION_ERROR', function () { pm.expect(pm.response.json().code).to.equal('VALIDATION_ERROR'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": [\"recipient@example.com\"],\n  \"text\": \"Missing subject field\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/email",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "email"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SMS Notifications",
+      "description": "Send SMS messages via Twilio provider.",
+      "item": [
+        {
+          "name": "POST /sms",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=sms', function () { pm.expect(pm.response.json().channel).to.equal('sms'); });",
+                  "pm.test('Response has status=accepted', function () { pm.expect(pm.response.json().status).to.equal('accepted'); });",
+                  "pm.test('Response may include providerMessageId', function () { const r = pm.response.json(); pm.expect(r).to.have.property('providerMessageId').or.not.have.property('providerMessageId'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"+14035550123\",\n  \"body\": \"Your confirmation code is 123456\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/sms",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "sms"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /sms (long message)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=sms', function () { pm.expect(pm.response.json().channel).to.equal('sms'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"+14035550123\",\n  \"body\": \"This is a longer SMS message that spans multiple segments. It will be delivered as one or more SMS messages depending on the provider. Test delivery with a real phone number.\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/sms",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "sms"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Slack Notifications",
+      "description": "Post messages to Slack channels via configured webhooks.",
+      "item": [
+        {
+          "name": "POST /slack (default target)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=slack', function () { pm.expect(pm.response.json().channel).to.equal('slack'); });",
+                  "pm.test('Response has status=accepted', function () { pm.expect(pm.response.json().status).to.equal('accepted'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"New wallet created: *wallet-abc123*\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/slack",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "slack"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /slack (named target)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=slack', function () { pm.expect(pm.response.json().channel).to.equal('slack'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"alerts\",\n  \"text\": \"Transaction failed: Insufficient balance. Account: *user-123*, Amount: 50000 sats\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/slack",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "slack"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /slack (with markdown)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"notifications\",\n  \"text\": \"*Bold text* with _italic_ and `code`. Link: <https://example.com|Example> :rocket:\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/slack",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "slack"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teams Notifications",
+      "description": "Post messages to Microsoft Teams channels via configured webhooks.",
+      "item": [
+        {
+          "name": "POST /teams (with title)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=teams', function () { pm.expect(pm.response.json().channel).to.equal('teams'); });",
+                  "pm.test('Response has status=accepted', function () { pm.expect(pm.response.json().status).to.equal('accepted'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"New Wallet Created\",\n  \"text\": \"A new wallet has been created with ID wallet-abc123.\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/teams",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "teams"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /teams (named target)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('Response has channel=teams', function () { pm.expect(pm.response.json().channel).to.equal('teams'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "{{serviceToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"alerts\",\n  \"title\": \"Transaction Alert\",\n  \"text\": \"Transaction failed: Insufficient balance. Account: user-123, Amount: 50000 sats\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/teams",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "teams"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication & Error Handling",
+      "description": "Test authentication failures and provider unavailability.",
+      "item": [
+        {
+          "name": "POST /email (missing service token - should fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401 Unauthorized', function () { pm.response.to.have.status(401); });",
+                  "pm.test('Code is UNAUTHORIZED', function () { pm.expect(pm.response.json().code).to.equal('UNAUTHORIZED'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": [\"test@example.com\"],\n  \"subject\": \"Test\",\n  \"text\": \"Test message\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/email",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "email"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /email (invalid token - should fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401 Unauthorized', function () { pm.response.to.have.status(401); });",
+                  "pm.test('Code is UNAUTHORIZED', function () { pm.expect(pm.response.json().code).to.equal('UNAUTHORIZED'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-service-token",
+                "value": "invalid.token.here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": [\"test@example.com\"],\n  \"subject\": \"Test\",\n  \"text\": \"Test message\"\n}"
+            },
+            "url": {
+              "raw": "{{yoneUrl}}/api/v1/notifications/email",
+              "host": ["{{yoneUrl}}"],
+              "path": ["api", "v1", "notifications", "email"]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "yoneUrl",
+      "value": "http://localhost:3005",
+      "type": "string"
+    },
+    {
+      "key": "internalJwtSecret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "internalJwtTtlSeconds",
+      "value": "300",
+      "type": "string"
+    },
+    {
+      "key": "internalJwtIssuer",
+      "value": "zhios",
+      "type": "string"
+    },
+    {
+      "key": "serviceTokenSub",
+      "value": "wallet-service",
+      "type": "string"
+    },
+    {
+      "key": "serviceTokenAudience",
+      "value": "yone",
+      "type": "string"
+    },
+    {
+      "key": "serviceToken",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

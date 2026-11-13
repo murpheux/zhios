@@ -1,0 +1,445 @@
+openapi: 3.1.0
+info:
+  title: yone Notification Service API
+  description: |
+    Service-to-service notification gateway: send emails, SMS, and chat messages (Slack, Teams) via configured provider webhooks.
+
+    All notification endpoints are **internal only** — they require an `x-service-token` header signed by the service caller with the shared `INTERNAL_JWT_SECRET`. End-users do not call these endpoints directly.
+
+    Notifications are fire-and-forget (202 Accepted); providers are called asynchronously. If a provider is not configured (missing credentials or webhook targets), the request returns 503 Service Unavailable with `code: CHANNEL_NOT_CONFIGURED`.
+  version: 1.0.0
+  contact:
+    name: "Platform Team"
+  license:
+    name: "Apache 2.0"
+
+servers:
+  - url: http://localhost:3005
+    description: Local development (port 3005 after Phase 0 migration)
+  - url: https://yone.example.com
+    description: Production
+
+tags:
+  - name: health
+    description: Liveness and readiness probes
+  - name: notifications
+    description: Send notifications via email, SMS, Slack, or Teams (service-to-service only)
+
+paths:
+  /healthz:
+    get:
+      tags:
+        - health
+      summary: Liveness probe
+      description: Always returns 200 OK if the service is running; used by orchestrators to detect a dead pod.
+      operationId: getHealthz
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+              example:
+                status: ok
+
+  /readyz:
+    get:
+      tags:
+        - health
+      summary: Readiness probe
+      description: |
+        Always returns 200 OK. Readiness has no checks — the service is stateless and does not probe provider connectivity (a Slack outage must not pull the pod from the load balancer).
+      operationId: getReadyz
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+              example:
+                status: ok
+
+  /api/v1/notifications/email:
+    post:
+      tags:
+        - notifications
+      summary: Send an email
+      description: |
+        Send an email via the configured email provider (SendGrid). Request is accepted immediately (202); delivery is asynchronous.
+
+        Requires `x-service-token` header with a service JWT signed by the caller.
+      operationId: sendEmail
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - to
+                - subject
+              properties:
+                to:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: string
+                    maxLength: 254
+                  description: List of recipient email addresses (valid email format)
+                subject:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Email subject line
+                text:
+                  type: string
+                  maxLength: 100000
+                  description: Plain text email body (at least one of text or html required)
+                html:
+                  type: string
+                  maxLength: 100000
+                  description: HTML email body (at least one of text or html required)
+            example:
+              to:
+                - user@example.com
+              subject: "Your transaction confirmation"
+              text: "Your transaction has been processed."
+              html: "<p>Your transaction has been processed.</p>"
+      responses:
+        '202':
+          description: Email accepted for delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResult'
+              example:
+                channel: email
+                status: accepted
+                providerMessageId: "sg-abc123xyz"
+        '400':
+          description: Validation error (missing required fields, invalid email format, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 400
+                code: VALIDATION_ERROR
+                message: "to must be an array with at least 1 item"
+        '401':
+          description: Missing or invalid x-service-token header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 401
+                code: UNAUTHORIZED
+                message: "Unauthorized"
+        '503':
+          description: Email provider not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 503
+                code: CHANNEL_NOT_CONFIGURED
+                message: "Email provider is not configured"
+
+  /api/v1/notifications/sms:
+    post:
+      tags:
+        - notifications
+      summary: Send an SMS
+      description: |
+        Send an SMS via the configured SMS provider (Twilio). Request is accepted immediately (202); delivery is asynchronous.
+
+        Requires `x-service-token` header with a service JWT signed by the caller.
+      operationId: sendSms
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - to
+                - body
+              properties:
+                to:
+                  type: string
+                  maxLength: 16
+                  description: Recipient phone number in E.164 format (e.g., +1-403-555-0123)
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 1600
+                  description: SMS message body (up to 160 characters recommended; longer messages incur multiple charges)
+            example:
+              to: "+14035550123"
+              body: "Your confirmation code is 123456"
+      responses:
+        '202':
+          description: SMS accepted for delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResult'
+              example:
+                channel: sms
+                status: accepted
+                providerMessageId: "smxxxx123456"
+        '400':
+          description: Validation error (invalid phone number, missing body, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 400
+                code: VALIDATION_ERROR
+                message: "body must be a string with at least 1 character"
+        '401':
+          description: Missing or invalid x-service-token header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 401
+                code: UNAUTHORIZED
+                message: "Unauthorized"
+        '503':
+          description: SMS provider not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 503
+                code: CHANNEL_NOT_CONFIGURED
+                message: "SMS provider is not configured"
+
+  /api/v1/notifications/slack:
+    post:
+      tags:
+        - notifications
+      summary: Post to a Slack channel
+      description: |
+        Send a message to a Slack channel via a configured webhook. Request is accepted immediately (202); delivery is asynchronous.
+
+        Requires `x-service-token` header with a service JWT signed by the caller.
+      operationId: notifySlack
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - text
+              properties:
+                target:
+                  type: string
+                  maxLength: 64
+                  description: Named webhook target configured on the service (e.g., "alerts", "transactions"). Defaults to "default" if not provided.
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  description: Message text; Slack markdown is supported
+            example:
+              target: "alerts"
+              text: "New wallet created: *wallet-123*"
+      responses:
+        '202':
+          description: Slack message accepted for delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResult'
+              example:
+                channel: slack
+                status: accepted
+        '400':
+          description: Validation error (missing text, target too long, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 400
+                code: VALIDATION_ERROR
+                message: "text must be a string with at least 1 character"
+        '401':
+          description: Missing or invalid x-service-token header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 401
+                code: UNAUTHORIZED
+                message: "Unauthorized"
+        '503':
+          description: Slack provider not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 503
+                code: CHANNEL_NOT_CONFIGURED
+                message: "Slack provider is not configured"
+
+  /api/v1/notifications/teams:
+    post:
+      tags:
+        - notifications
+      summary: Post to a Teams channel
+      description: |
+        Send a message to a Microsoft Teams channel via a configured webhook. Request is accepted immediately (202); delivery is asynchronous.
+
+        Requires `x-service-token` header with a service JWT signed by the caller.
+      operationId: notifyTeams
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - text
+              properties:
+                target:
+                  type: string
+                  maxLength: 64
+                  description: Named webhook target configured on the service (e.g., "alerts", "transactions"). Defaults to "default" if not provided.
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  description: Message body
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Card title (Teams-specific formatting)
+            example:
+              target: "alerts"
+              title: "New Wallet"
+              text: "A new wallet has been created: wallet-123"
+      responses:
+        '202':
+          description: Teams message accepted for delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResult'
+              example:
+                channel: teams
+                status: accepted
+        '400':
+          description: Validation error (missing text, title too long, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 400
+                code: VALIDATION_ERROR
+                message: "text must be a string with at least 1 character"
+        '401':
+          description: Missing or invalid x-service-token header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 401
+                code: UNAUTHORIZED
+                message: "Unauthorized"
+        '503':
+          description: Teams provider not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 503
+                code: CHANNEL_NOT_CONFIGURED
+                message: "Teams provider is not configured"
+
+components:
+  schemas:
+    NotificationResult:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum: [email, sms, slack, teams]
+          description: The notification channel used
+        status:
+          type: string
+          enum: [accepted]
+          description: Status of the notification (always "accepted" on 202 response)
+        providerMessageId:
+          type: string
+          description: Provider-specific message ID (if the provider returns one); optional
+      required:
+        - channel
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          description: HTTP status code
+        code:
+          type: string
+          description: Machine-readable error code (e.g., VALIDATION_ERROR, UNAUTHORIZED, CHANNEL_NOT_CONFIGURED, INTERNAL_ERROR)
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error details (only present for non-opaque 5xx errors)
+      required:
+        - statusCode
+        - code
+        - message
+
+  securitySchemes:
+    serviceToken:
+      type: apiKey
+      in: header
+      name: x-service-token
+      description: |
+        Service-to-service JWT token signed with `INTERNAL_JWT_SECRET`.
+        Format: HS256 JWT with claims { sub, aud, role: 'service', iss, iat, exp }.
+        Generated by the caller and verified against the allowlist in `ALLOWED_SERVICE_TOKENS`.

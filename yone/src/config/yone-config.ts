@@ -54,7 +54,7 @@ const yoneEnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     SERVICE_NAME: z.string().min(1).default('yone'),
-    PORT: z.coerce.number().int().positive().default(3004),
+    PORT: z.coerce.number().int().positive().default(3005),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
     LOG_TO_FILE: z.enum(['true', 'false']).optional(), // default resolved in transform: true in production
     LOG_FILE_PATH: z.string().min(1).default('./logs'),

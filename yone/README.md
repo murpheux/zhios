@@ -51,7 +51,7 @@ Errors: `400 VALIDATION_ERROR`, `401 UNAUTHORIZED`, `403 FORBIDDEN`, `429 RATE_L
 | Variable | Required | Notes |
 |---|---|---|
 | `ALLOWED_SERVICE_TOKENS` | prod | CSV of accepted `x-service-token` values, each >= 16 chars |
-| `PORT` | no | default `3004` |
+| `PORT` | no | default `3005` |
 | `NOTIFICATION_TIMEOUT_MS` | no | provider call timeout, default 5000 |
 | `SENDGRID_API_KEY`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME` | email | key + from-address together; sender must be verified in SendGrid |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | SMS | plus one of `TWILIO_SMS_FROM` (E.164) or `TWILIO_MESSAGING_SERVICE_SID` |
@@ -107,7 +107,7 @@ LOG_LEVEL=debug npm run dev
 
 # Example output:
 # [12:34:56.123] INFO (yone-service/12345): Server listening
-#   port: 3004
+#   port: 3005
 #   env: "development"
 ```
 
@@ -277,7 +277,7 @@ LOG_TO_FILE=true npm run dev
 ls -lh logs/
 
 # 3. Send a test notification
-curl -X POST http://localhost:3004/api/v1/notifications/email \
+curl -X POST http://localhost:3005/api/v1/notifications/email \
   -H "Content-Type: application/json" \
   -H "x-service-token: test-token" \
   -d '{"to":["test@example.com"],"subject":"Test","text":"Test message"}'
@@ -462,7 +462,7 @@ npm run build
 Smoke test (mint a token with `createServiceTokenSigner` from `@zuma/shared-http`, audience `yone`, caller in `ALLOWED_CALLERS`):
 
 ```zsh
-curl -sS -X POST localhost:3004/api/v1/notifications/slack \
+curl -sS -X POST localhost:3005/api/v1/notifications/slack \
   -H "x-service-token: $TOKEN" -H 'content-type: application/json' -d '{"text":"hello from yone"}'
 ```
 

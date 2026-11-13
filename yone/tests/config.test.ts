@@ -6,7 +6,7 @@ const SID = `AC${'a'.repeat(32)}`;
 describe('loadYoneConfig', () => {
   it('loads with only a service token and applies defaults', () => {
     const c = loadYoneConfig(testEnv());
-    expect(c).toMatchObject({ PORT: 3004, SERVICE_NAME: 'yone', SLACK_WEBHOOK_URLS: {}, TEAMS_WEBHOOK_URLS: {} });
+    expect(c).toMatchObject({ PORT: 3005, SERVICE_NAME: 'yone', SLACK_WEBHOOK_URLS: {}, TEAMS_WEBHOOK_URLS: {} });
     expect(c.ALLOWED_SERVICE_TOKENS).toEqual(['test-service-token-0123456789abcdef']);
   });
 

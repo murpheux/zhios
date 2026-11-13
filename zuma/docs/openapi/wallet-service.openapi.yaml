@@ -1,0 +1,936 @@
+openapi: 3.1.0
+info:
+  title: Wallet Service API
+  description: |
+    Bitcoin wallet management service providing CRUD operations, balance tracking, and transaction history.
+
+    **Authentication:**
+    - Public endpoints require a Bearer token (JWT) via the `Authorization` header
+    - Internal service-to-service endpoints require `x-service-token` (short-lived JWT signed with `INTERNAL_JWT_SECRET`)
+    - Admin endpoints require the `admin` role in the JWT claims
+  version: 0.1.0
+  contact:
+    name: Zuma Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: 'http://localhost:3001'
+    description: Local development (wallet-service)
+  - url: 'https://wallet.api.example.com'
+    description: Production
+
+paths:
+  /api/v1/wallets:
+    post:
+      operationId: createWallet
+      summary: Create a new wallet
+      description: Create a new wallet for the authenticated user. Generates a new Bitcoin address based on the wallet type and network.
+      tags:
+        - wallets
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  description: Human-readable wallet label
+                  minLength: 1
+                  example: 'My Hot Wallet'
+                network:
+                  type: string
+                  enum: [mainnet, testnet, regtest]
+                  description: Bitcoin network
+                  example: 'testnet'
+                type:
+                  type: string
+                  enum: [hot, cold, custodial, non-custodial]
+                  description: Wallet type (determines key management strategy)
+                  example: 'hot'
+                metadata:
+                  type: object
+                  description: Optional custom metadata
+                  additionalProperties: true
+                  example: { department: 'engineering', project: 'zuma' }
+              required:
+                - label
+                - network
+                - type
+      responses:
+        201:
+          description: Wallet created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wallet'
+              example:
+                id: '6710f1f1c2a1b2c3d4e5f6a7'
+                label: 'My Hot Wallet'
+                address: 'tb1q2nfxmhd4n3c8p5r3z9w2x4v7q0s1t6u8v9w0x'
+                network: 'testnet'
+                type: 'hot'
+                balanceCache: '0'
+                metadata:
+                  department: engineering
+                  project: zuma
+                ownerUserId: 'user-123'
+                status: 'active'
+                createdAt: '2024-10-13T12:00:00.000Z'
+                updatedAt: '2024-10-13T12:00:00.000Z'
+        400:
+          description: Invalid input (validation failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      operationId: listWallets
+      summary: List wallets
+      description: Retrieve a paginated list of wallets. Users see only their own wallets unless they have admin privileges.
+      tags:
+        - wallets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (1-indexed)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+        - name: ownerUserId
+          in: query
+          schema:
+            type: string
+          description: Filter by owner user ID (admin only)
+      responses:
+        200:
+          description: Wallets retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Wallet'
+                  total:
+                    type: number
+                    description: Total number of wallets matching filters
+                  page:
+                    type: number
+                  limit:
+                    type: number
+                  totalPages:
+                    type: number
+                required:
+                  - items
+                  - total
+                  - page
+                  - limit
+                  - totalPages
+        401:
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/wallets/{id}:
+    get:
+      operationId: getWallet
+      summary: Get wallet by ID
+      description: Retrieve full details of a wallet. Users can only access their own wallets unless they have admin privileges.
+      tags:
+        - wallets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      responses:
+        200:
+          description: Wallet retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wallet'
+        401:
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Access denied (not wallet owner)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/wallets/{id}/metadata:
+    patch:
+      operationId: updateWalletMetadata
+      summary: Update wallet metadata
+      description: Update the label and/or metadata of a wallet. Only the wallet owner or admins can update.
+      tags:
+        - wallets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  minLength: 1
+                  description: New wallet label
+                  example: 'Updated Wallet Name'
+                metadata:
+                  type: object
+                  description: Custom metadata to merge (deep update)
+                  additionalProperties: true
+                  example: { status: 'archived' }
+      responses:
+        200:
+          description: Wallet metadata updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wallet'
+        400:
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/wallets/{id}/balance:
+    get:
+      operationId: getWalletBalance
+      summary: Get wallet balance
+      description: Retrieve the current stored balance of a wallet in satoshis. This is a cached value updated by transaction confirmation events.
+      tags:
+        - wallets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      responses:
+        200:
+          description: Balance retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  walletId:
+                    type: string
+                    example: '6710f1f1c2a1b2c3d4e5f6a7'
+                  balanceCache:
+                    type: string
+                    pattern: '^(0|[1-9][0-9]{0,15})$'
+                    description: Balance in satoshis (non-negative integer as string)
+                    example: '5000000'
+                required:
+                  - walletId
+                  - balanceCache
+        401:
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/wallets/{id}/transactions:
+    get:
+      operationId: getWalletTransactionHistory
+      summary: Get wallet transaction history
+      description: Retrieve all transactions associated with a wallet. Fetches confirmed transactions from the transaction service and pending local transactions.
+      tags:
+        - wallets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      responses:
+        200:
+          description: Transaction history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      example: '6710f1f1c2a1b2c3d4e5f6a8'
+                    walletId:
+                      type: string
+                      example: '6710f1f1c2a1b2c3d4e5f6a7'
+                    txid:
+                      type:
+                        - string
+                        - 'null'
+                      description: Bitcoin transaction hash (null if pending)
+                      example: 'abc123def456...'
+                    type:
+                      type: string
+                      enum: [send, receive, internal-transfer]
+                      example: 'send'
+                    amount:
+                      type: string
+                      pattern: '^[1-9][0-9]{0,15}$'
+                      description: Amount in satoshis
+                      example: '100000'
+                    feeRate:
+                      type: string
+                      description: Fee rate in sat/vB
+                      example: '12'
+                    status:
+                      type: string
+                      enum: [pending, broadcasting, broadcast, confirmed, failed]
+                      example: 'confirmed'
+                    confirmations:
+                      type: number
+                      example: 10
+                    createdAt:
+                      type: string
+                      format: date-time
+                      example: '2024-10-13T12:00:00.000Z'
+                    updatedAt:
+                      type: string
+                      format: date-time
+                      example: '2024-10-13T12:00:00.000Z'
+        401:
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/admin/wallets/{id}/deposits:
+    post:
+      operationId: adminDepositToWallet
+      summary: Admin deposit to wallet
+      description: |
+        **Admin-only** operation to fund a wallet for development/testing.
+        This is a temporary endpoint pending full chain observer integration.
+        Idempotent by `reference` — replaying with the same reference returns the same result.
+      tags:
+        - admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amountSats:
+                  type: string
+                  pattern: '^[1-9][0-9]{0,15}$'
+                  description: Amount in satoshis (strictly positive)
+                  example: '100000'
+                reference:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  pattern: '^[A-Za-z0-9:._-]+$'
+                  description: Unique idempotency reference (e.g., faucet-2026-10-31-001)
+                  example: 'faucet-2026-10-31-001'
+              required:
+                - amountSats
+                - reference
+      responses:
+        200:
+          description: Deposit completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  walletId:
+                    type: string
+                    example: '6710f1f1c2a1b2c3d4e5f6a7'
+                  balanceCache:
+                    type: string
+                    pattern: '^(0|[1-9][0-9]{0,15})$'
+                    description: Updated balance in satoshis
+                    example: '5100000'
+                required:
+                  - walletId
+                  - balanceCache
+        400:
+          description: Invalid input or amount exceeds limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Access denied (admin role required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: Idempotency conflict (reference already used with different amount)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/wallets/{id}:
+    get:
+      operationId: getWalletForService
+      summary: Get wallet (service-to-service)
+      description: |
+        **Internal endpoint** — service-to-service only.
+        Retrieve a wallet summary for ownership and status validation.
+        Requires `x-service-token` header from `transaction-service`.
+      tags:
+        - internal
+      security:
+        - serviceAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      responses:
+        200:
+          description: Wallet summary retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: '6710f1f1c2a1b2c3d4e5f6a7'
+                  ownerUserId:
+                    type: string
+                    example: 'user-123'
+                  status:
+                    type: string
+                    enum: [active, suspended, archived]
+                    example: 'active'
+                  network:
+                    type: string
+                    enum: [mainnet, testnet, regtest]
+                    example: 'testnet'
+                  address:
+                    type: string
+                    example: 'tb1q2nfxmhd4n3c8p5r3z9w2x4v7q0s1t6u8v9w0x'
+                required:
+                  - id
+                  - ownerUserId
+                  - status
+                  - network
+                  - address
+        401:
+          description: Missing or invalid service token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/wallets/{id}/debits:
+    post:
+      operationId: debitWallet
+      summary: Debit wallet (service-to-service)
+      description: |
+        **Internal endpoint** — `transaction-service` only.
+        Debit a wallet for a send transaction. Guarded by ownership check and balance validation.
+        Idempotent by `transactionId` — retries with the same ID return the same balance.
+      tags:
+        - internal
+      security:
+        - serviceAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transactionId:
+                  type: string
+                  pattern: '^[a-f0-9]{24}$'
+                  description: Transaction ID for idempotency
+                  example: '6710f1f1c2a1b2c3d4e5f6a8'
+                amountSats:
+                  type: string
+                  pattern: '^[1-9][0-9]{0,15}$'
+                  description: Amount to debit (amount + fee) in satoshis
+                  example: '101692'
+              required:
+                - transactionId
+                - amountSats
+      responses:
+        200:
+          description: Debit completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  walletId:
+                    type: string
+                    example: '6710f1f1c2a1b2c3d4e5f6a7'
+                  balanceCache:
+                    type: string
+                    pattern: '^(0|[1-9][0-9]{0,15})$'
+                    description: Updated balance after debit
+                    example: '4898308'
+                required:
+                  - walletId
+                  - balanceCache
+        400:
+          description: Invalid input or insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Missing or invalid service token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: Conflict (already debited with different amount, or wallet suspended)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/wallets/{id}/credits:
+    post:
+      operationId: creditWallet
+      summary: Credit wallet (service-to-service)
+      description: |
+        **Internal endpoint** — `transaction-service` only.
+        Refund a wallet when a send fails. Idempotent by `transactionId`.
+      tags:
+        - internal
+      security:
+        - serviceAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId of the wallet
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transactionId:
+                  type: string
+                  pattern: '^[a-f0-9]{24}$'
+                  description: Transaction ID for idempotency
+                  example: '6710f1f1c2a1b2c3d4e5f6a8'
+                amountSats:
+                  type: string
+                  pattern: '^[1-9][0-9]{0,15}$'
+                  description: Amount to refund in satoshis
+                  example: '101692'
+                reason:
+                  type: string
+                  enum: [refund]
+                  description: Reason code for the credit
+                  example: 'refund'
+              required:
+                - transactionId
+                - amountSats
+                - reason
+      responses:
+        200:
+          description: Credit (refund) completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  walletId:
+                    type: string
+                    example: '6710f1f1c2a1b2c3d4e5f6a7'
+                  balanceCache:
+                    type: string
+                    pattern: '^(0|[1-9][0-9]{0,15})$'
+                    description: Updated balance after refund
+                    example: '5000000'
+                required:
+                  - walletId
+                  - balanceCache
+        400:
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Missing or invalid service token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: Conflict (already credited with different amount)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Wallet:
+      type: object
+      description: Wallet entity with balance, address, and metadata
+      properties:
+        id:
+          type: string
+          pattern: '^[a-f0-9]{24}$'
+          description: MongoDB ObjectId
+          example: '6710f1f1c2a1b2c3d4e5f6a7'
+        label:
+          type: string
+          description: User-defined wallet label
+          example: 'My Hot Wallet'
+        address:
+          type: string
+          description: Bitcoin address (network-specific)
+          example: 'tb1q2nfxmhd4n3c8p5r3z9w2x4v7q0s1t6u8v9w0x'
+        network:
+          type: string
+          enum: [mainnet, testnet, regtest]
+          description: Bitcoin network
+          example: 'testnet'
+        type:
+          type: string
+          enum: [hot, cold, custodial, non-custodial]
+          description: Wallet type determining key management
+          example: 'hot'
+        balanceCache:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,15})$'
+          description: Cached balance in satoshis
+          example: '5000000'
+        metadata:
+          type: object
+          description: Custom application metadata
+          additionalProperties: true
+          example: { department: engineering }
+        ownerUserId:
+          type: string
+          description: User ID of the wallet owner
+          example: 'user-123'
+        status:
+          type: string
+          enum: [active, suspended, archived]
+          description: Wallet status
+          example: 'active'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 creation timestamp
+          example: '2024-10-13T12:00:00.000Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 last update timestamp
+          example: '2024-10-13T12:00:00.000Z'
+      required:
+        - id
+        - label
+        - address
+        - network
+        - type
+        - balanceCache
+        - metadata
+        - ownerUserId
+        - status
+        - createdAt
+        - updatedAt
+
+    Error:
+      type: object
+      description: Error response with details
+      properties:
+        statusCode:
+          type: number
+          description: HTTP status code
+          example: 400
+        code:
+          type: string
+          description: Machine-readable error code
+          example: 'VALIDATION_ERROR'
+        message:
+          type: string
+          description: Human-readable error message
+          example: 'Invalid wallet type'
+        details:
+          type: object
+          description: Additional error context
+          additionalProperties: true
+          example: { field: 'type', constraint: 'enum' }
+      required:
+        - statusCode
+        - code
+        - message
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        User JWT token with user claims (subject, roles, etc.).
+        Obtained from the authentication service.
+        Format: `Authorization: Bearer <token>`
+
+    serviceAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Service-to-service token (x-service-token).
+        Signed with INTERNAL_JWT_SECRET by the calling service.
+        Only valid for internal endpoints.
+        Format: `x-service-token: <token>`
+
+tags:
+  - name: wallets
+    description: Wallet CRUD and balance operations
+  - name: admin
+    description: Admin-only operations (dev/test funding)
+  - name: internal
+    description: Service-to-service endpoints (not exposed via public ingress)
+
+x-internal-note: |
+  Internal endpoints (prefixed /internal) are service-to-service only and are not exposed
+  through the public API gateway. Access requires x-service-token from transaction-service
+  with expectedSubject='transaction-service'. Never expose /internal/* through a public ingress.

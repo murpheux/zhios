@@ -43,6 +43,8 @@ export interface VerifyServiceTokenOptions {
   issuer: string;
   /** This (receiving) service's name; the token `aud` must equal it. */
   audience: string;
+  /** If set, the token `sub` (calling service) must equal it. */
+  expectedSubject?: string;
   clockSkewSeconds?: number;
   now?: () => number;
 }
@@ -136,6 +138,9 @@ export const verifyServiceToken = (token: string, opts: VerifyServiceTokenOption
   if (claims.aud !== opts.audience) return reject('audience mismatch');
   if (claims.role !== SERVICE_ROLE) return reject('role mismatch');
   if (typeof claims.sub !== 'string' || claims.sub.length === 0) return reject('missing sub');
+  if (opts.expectedSubject !== undefined && claims.sub !== opts.expectedSubject) {
+    return reject('subject mismatch');
+  }
   if (typeof claims.exp !== 'number' || claims.exp + skew <= now) return reject('expired');
   if (typeof claims.iat === 'number' && claims.iat - skew > now) return reject('issued in the future');
   return claims.sub;

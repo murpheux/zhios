@@ -106,3 +106,31 @@ Amounts and balances are integer satoshis everywhere (strings on the wire, valid
 - `zuma/docs/testing-strategy.md` — testing pyramid detail and why CI skips Mongo integration tests
 - `zuma/docs/security.md` — auth, secrets, key isolation, OWASP considerations
 - `zuma/docs/postman/` — Postman collection + environment for manual/exploratory API testing
+
+## Multi-Service Delegation Pattern
+
+**When a prompt applies to all microservices simultaneously** (zuma, yone, ozzo, gnee), **always use sub-agents in parallel for speed.**
+
+### Example
+```
+Prompt: "Add pino logging to all four services"
+→ Launch 4 developer agents in parallel (one per service) in a single Agent tool call
+→ Each agent reads existing service code independently
+→ Each agent makes changes, tests, and commits
+→ All work concurrently; results arrive in a single batch notification
+```
+
+### Why Parallel
+- Services are independent with no blocking dependencies
+- **4× speedup**: each service typically requires ~2 weeks of agent work
+- Batch results show together in one coordinator turn
+
+### How to Trigger
+- Router launches agents with **multiple `Agent(...)` calls in one message** (not separate turns)
+- Each agent gets a **self-contained brief** with service-specific paths and constraints
+- Agents run concurrently in background; coordinator is notified when all complete
+
+### When NOT to Use Parallel
+- One service depends on another's output (e.g., "first add auth to ozzo, then wire into zuma")
+- Task is inherently sequential or requires human decision between steps
+- Changes need coordination across services (rare, given the architecture)

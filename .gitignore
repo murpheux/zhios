@@ -354,34 +354,10 @@ Temporary Items
 
 ### Terraform ###
 **/.terraform/
+!.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
-*.tfplan
-crash.log
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-
-### Test artefacts ###
-**/test-results/
-**/playwright-report/
-
-### zhios local deploy ###
-# Root .env is covered by ".env" above; Terraform docker state holds container env (secrets)
-infrastructure/terraform/docker/terraform.tfvars
-infrastructure/terraform/docker/*.auto.tfvars
-
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.backup
-
-# Terraform
-**/.terraform/*
-*.tfstate
-*.tfstate.*
-*.tfstate.backup
+.terraform.tfstate.lock.info
 *.tfplan
 *.tfvars
 !*.tfvars.example
@@ -393,6 +369,26 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+
+### Secrets, keys and binaries ###
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+kubeconfig*
+*.exe
+
+### Test artefacts ###
+**/test-results/
+**/playwright-report/
+
+### zhios local deploy ###
+# Root .env is covered by ".env" above; Terraform docker state holds container env (secrets)
+infrastructure/terraform/docker/terraform.tfvars
+infrastructure/terraform/docker/*.auto.tfvars
 
 # Node
 node_modules/

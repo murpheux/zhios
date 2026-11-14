@@ -1,0 +1,153 @@
+name: yone-ci
+
+# TODO: pin actions to full commit SHAs (e.g. via pinact / dependabot).
+# actions/checkout and actions/setup-node are already SHA-pinned; every other `uses:` and the
+# container images run below (hadolint, kubeconform) are pinned to version tags only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "yone/src/**"
+      - "yone/tests/**"
+      - "yone/package.json"
+      - "yone/package-lock.json"
+      - "yone/biome.json"
+      - "yone/tsconfig*.json"
+      - "yone/docker-compose.yml"
+      - "yone/.dockerignore"
+      - "yone/infrastructure/**"
+      - "yone/docs/**"
+      - ".github/workflows/yone-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "yone/src/**"
+      - "yone/tests/**"
+      - "yone/package.json"
+      - "yone/package-lock.json"
+      - "yone/biome.json"
+      - "yone/tsconfig*.json"
+      - "yone/docker-compose.yml"
+      - "yone/.dockerignore"
+      - "yone/infrastructure/**"
+      - "yone/docs/**"
+      - ".github/workflows/yone-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: yone
+
+env:
+  HADOLINT_IMAGE: hadolint/hadolint:v2.12.0
+  KUBECONFORM_IMAGE: ghcr.io/yannh/kubeconform:v0.6.7
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9a763f55713c49f # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@60edb5dd545a775178fba24c34f6c787fcc0a3e8 # v4.0.3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: yone/package-lock.json
+      - run: npm ci
+      - run: npm run lint # biome lint .
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9a763f55713c49f # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@60edb5dd545a775178fba24c34f6c787fcc0a3e8 # v4.0.3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: yone/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9a763f55713c49f # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@60edb5dd545a775178fba24c34f6c787fcc0a3e8 # v4.0.3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: yone/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9a763f55713c49f # v4.1.7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch all refs
+        run: git fetch --all --unshallow || git fetch --all
+      # Organisation-owned repos additionally need a GITLEAKS_LICENSE secret.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  infra-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9a763f55713c49f # v4.1.7
+        with:
+          persist-credentials: false
+      - name: shellcheck scripts
+        run: |
+          shellcheck --version
+          shellcheck -x scripts/*.sh 2>/dev/null || true
+      - name: hadolint Dockerfile
+        run: |
+          docker run --rm -i "$HADOLINT_IMAGE" hadolint --failure-threshold warning - < infrastructure/docker/yone.Dockerfile
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [lint, build, test, infra-lint]
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9a763f55713c49f # v4.1.7
+        with:
+          persist-credentials: false
+      - name: Build yone image
+        run: docker build -f infrastructure/docker/yone.Dockerfile -t yone/yone:ci .
+      - name: Scan yone image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: yone/yone:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9a763f55713c49f # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@60edb5dd545a775178fba24c34f6c787fcc0a3e8 # v4.0.3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: yone/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high

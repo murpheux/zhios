@@ -1,15 +1,81 @@
 import { buildAddress, type Address, type AddressInput } from './address';
 import {
-  assertSex,
-  normalizeDateOfBirth,
   normalizeEmail,
   normalizeName,
-  normalizePhone,
   normalizeUsername,
-  type Sex,
+  normalizeDateOfBirth,
 } from './value-objects';
 import { ValidationError } from './errors';
+import { assertRole, assertPermission, type Role, type Permission } from './enums';
+import {
+  buildUserContact,
+  buildUserIdentity,
+  buildUserPreferences,
+  buildUserEmergencyContacts,
+  type UserContact,
+  type UserIdentity,
+  type UserPreferences,
+  type UserEmergencyContacts,
+  type UserContactInput,
+  type UserIdentityInput,
+  type UserPreferencesInput,
+  type UserEmergencyContactsInput,
+} from './user-profile';
+import {
+  buildUserEmployment,
+  buildUserCompliance,
+  buildExternalIds,
+  buildUserAudit,
+  type UserEmployment,
+  type UserCompliance,
+  type ExternalIds,
+  type UserAudit,
+  type UserEmploymentInput,
+  type UserComplianceInput,
+  type ExternalIdsInput,
+} from './user-compliance';
 
+/**
+ * Core User entity — focused on identity and authentication.
+ *
+ * Related entities:
+ * - UserProfile (Identity, Contact, Preferences, EmergencyContacts)
+ * - UserCompliance (Tax ID, consents, employment)
+ * - UserAudit (Audit trail and lifecycle)
+ */
+export interface User {
+  // ---- Identity & Authentication
+  id: string;
+  username: string;
+  email: string;
+  /** Okta user ID (JWT `sub`). */
+  externalId: string;
+
+  // ---- Roles & Permissions
+  roles: Role[];
+  permissions: Permission[];
+
+  // ---- Authentication State
+  isActive: boolean;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  lastLoginAt: Date | null;
+  lastPasswordChangeAt: Date | null;
+  mfaEnabled: boolean;
+
+  // ---- Related Entities
+  identity: UserIdentity;
+  contact: UserContact;
+  address: Address | null;
+  preferences: UserPreferences;
+  emergencyContacts: UserEmergencyContacts;
+  employment: UserEmployment;
+  compliance: UserCompliance;
+  externalIds: ExternalIds;
+  audit: UserAudit;
+}
+
+// For backwards compatibility with existing code
 export interface NextOfKin {
   fullName: string;
   relationship: string;
@@ -23,140 +89,186 @@ export interface ContactPerson {
   email?: string;
 }
 
-export interface NextOfKinInput {
-  fullName: string;
-  relationship: string;
-  phone?: string;
-  email?: string;
-}
+export type NewUser = Omit<User, 'id' | 'audit'>;
 
-export interface ContactPersonInput {
-  fullName: string;
-  phone: string;
-  email?: string;
-}
-
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  /** Okta user id (JWT `sub`). */
-  externalId: string;
-  address: Address | null;
-  dateOfBirth: Date | null;
-  nextOfKin: NextOfKin | null;
-  contactPerson: ContactPerson | null;
-  sex: Sex | null;
-  /** SIN/SSN ciphertext from SensitiveDataPort; the plaintext is never stored or returned. */
-  encryptedTaxId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export type NewUser = Omit<User, 'id' | 'createdAt' | 'updatedAt'>;
 export type UserPatch = Partial<
   Pick<
     User,
     | 'username'
     | 'email'
-    | 'firstName'
-    | 'lastName'
+    | 'isActive'
+    | 'mfaEnabled'
+    | 'phoneVerified'
+    | 'identity'
+    | 'contact'
     | 'address'
-    | 'dateOfBirth'
-    | 'nextOfKin'
-    | 'contactPerson'
-    | 'sex'
-    | 'encryptedTaxId'
+    | 'preferences'
+    | 'emergencyContacts'
+    | 'employment'
+    | 'compliance'
+    | 'externalIds'
   >
 >;
 
-/** Raw (un-normalized) profile fields shared by create and update. */
-export interface ProfileInput {
-  address?: AddressInput;
-  dateOfBirth?: string;
-  nextOfKin?: NextOfKinInput;
-  contactPerson?: ContactPersonInput;
-  sex?: string;
-  /** Already encrypted via SensitiveDataPort. */
-  encryptedTaxId?: string;
-}
-
-export interface NewUserInput extends ProfileInput {
+/**
+ * Input for creating a new user.
+ */
+export interface NewUserInput {
+  // ---- Identity & Authentication
   username: string;
   email: string;
-  firstName: string;
-  lastName: string;
   externalId: string;
+
+  // ---- Profile Data
+  identity: UserIdentityInput;
+  contact?: UserContactInput;
+  address?: AddressInput;
+  preferences?: UserPreferencesInput;
+  emergencyContacts?: UserEmergencyContactsInput;
+
+  // ---- Roles & Permissions (optional, defaults to ['user'])
+  roles?: string[];
+  permissions?: string[];
+
+  // ---- Compliance (optional)
+  employment?: UserEmploymentInput;
+  compliance?: UserComplianceInput;
+  externalIds?: ExternalIdsInput;
 }
 
-export interface UserPatchInput extends ProfileInput {
+/**
+ * Input for patching (partial update) an existing user.
+ */
+export interface UserPatchInput {
+  // ---- Identity & Authentication
   username?: string;
   email?: string;
-  firstName?: string;
-  lastName?: string;
+
+  // ---- Profile Data
+  identity?: Partial<UserIdentityInput>;
+  contact?: UserContactInput;
+  address?: AddressInput;
+  preferences?: UserPreferencesInput;
+  emergencyContacts?: UserEmergencyContactsInput;
+
+  // ---- Auth State
+  isActive?: boolean;
+  mfaEnabled?: boolean;
+  phoneVerified?: boolean;
+
+  // ---- Roles & Permissions
+  roles?: string[];
+  permissions?: string[];
+
+  // ---- Compliance
+  employment?: UserEmploymentInput;
+  compliance?: UserComplianceInput;
+  externalIds?: ExternalIdsInput;
 }
 
-function buildNextOfKin(input: NextOfKinInput): NextOfKin {
-  const kin: NextOfKin = {
-    fullName: normalizeName(input.fullName, 'nextOfKin.fullName'),
-    relationship: normalizeName(input.relationship, 'nextOfKin.relationship'),
-  };
-  if (input.phone !== undefined) kin.phone = normalizePhone(input.phone, 'nextOfKin.phone');
-  if (input.email !== undefined) kin.email = normalizeEmail(input.email);
-  return kin;
-}
+// ---------------------------------------------------------------- Builders
 
-function buildContactPerson(input: ContactPersonInput): ContactPerson {
-  const contact: ContactPerson = {
-    fullName: normalizeName(input.fullName, 'contactPerson.fullName'),
-    phone: normalizePhone(input.phone, 'contactPerson.phone'),
-  };
-  if (input.email !== undefined) contact.email = normalizeEmail(input.email);
-  return contact;
-}
-
-/** Only fields present in the input appear in the result (so it can back a partial update). */
-function buildProfilePatch(input: ProfileInput): UserPatch {
-  const patch: UserPatch = {};
-  if (input.address !== undefined) patch.address = buildAddress(input.address);
-  if (input.dateOfBirth !== undefined) patch.dateOfBirth = normalizeDateOfBirth(input.dateOfBirth);
-  if (input.nextOfKin !== undefined) patch.nextOfKin = buildNextOfKin(input.nextOfKin);
-  if (input.contactPerson !== undefined) patch.contactPerson = buildContactPerson(input.contactPerson);
-  if (input.sex !== undefined) patch.sex = assertSex(input.sex);
-  if (input.encryptedTaxId !== undefined) patch.encryptedTaxId = input.encryptedTaxId;
-  return patch;
-}
-
+/**
+ * Build a new user from input, applying normalization and validation.
+ */
 export function buildNewUser(input: NewUserInput): NewUser {
-  if (input.externalId.trim().length === 0) {
+  if (!input.externalId || input.externalId.trim().length === 0) {
     throw new ValidationError('externalId is required');
   }
-  const profile = buildProfilePatch(input);
+
+  const roles = (input.roles || ['user']).map((r) => assertRole(r));
+  const permissions = (input.permissions || []).map((p) => assertPermission(p));
+
   return {
     username: normalizeUsername(input.username),
     email: normalizeEmail(input.email),
-    firstName: normalizeName(input.firstName, 'firstName'),
-    lastName: normalizeName(input.lastName, 'lastName'),
     externalId: input.externalId.trim(),
-    address: profile.address ?? null,
-    dateOfBirth: profile.dateOfBirth ?? null,
-    nextOfKin: profile.nextOfKin ?? null,
-    contactPerson: profile.contactPerson ?? null,
-    sex: profile.sex ?? null,
-    encryptedTaxId: profile.encryptedTaxId ?? null,
+    roles,
+    permissions,
+    isActive: true,
+    emailVerified: false,
+    phoneVerified: false,
+    lastLoginAt: null,
+    lastPasswordChangeAt: new Date(),
+    mfaEnabled: false,
+    identity: buildUserIdentity(input.identity),
+    contact: buildUserContact(input.contact),
+    address: input.address ? buildAddress(input.address) : null,
+    preferences: buildUserPreferences(input.preferences),
+    emergencyContacts: buildUserEmergencyContacts(input.emergencyContacts),
+    employment: buildUserEmployment(input.employment),
+    compliance: buildUserCompliance(input.compliance),
+    externalIds: buildExternalIds(input.externalIds),
   };
 }
 
+/**
+ * Build a patch (partial update) from input, applying normalization and validation.
+ * Only fields present in the input appear in the result.
+ */
 export function buildUserPatch(input: UserPatchInput): UserPatch {
-  const patch: UserPatch = buildProfilePatch(input);
+  if (Object.keys(input).length === 0) {
+    throw new ValidationError('At least one field must be provided');
+  }
+
+  const patch: UserPatch = {};
+
+  // ---- Identity & Auth
   if (input.username !== undefined) patch.username = normalizeUsername(input.username);
   if (input.email !== undefined) patch.email = normalizeEmail(input.email);
-  if (input.firstName !== undefined) patch.firstName = normalizeName(input.firstName, 'firstName');
-  if (input.lastName !== undefined) patch.lastName = normalizeName(input.lastName, 'lastName');
+  if (input.isActive !== undefined) patch.isActive = input.isActive;
+  if (input.mfaEnabled !== undefined) patch.mfaEnabled = input.mfaEnabled;
+  if (input.phoneVerified !== undefined) patch.phoneVerified = input.phoneVerified;
+
+  // ---- Profile
+  if (input.identity !== undefined) {
+    const partial = input.identity as Partial<UserIdentityInput>;
+    if (Object.keys(partial).length > 0) {
+      const current = buildUserIdentity({ displayName: 'temp' });
+      patch.identity = { ...current, ...partial };
+    }
+  }
+  if (input.contact !== undefined) patch.contact = buildUserContact(input.contact);
+  if (input.address !== undefined) patch.address = buildAddress(input.address);
+  if (input.preferences !== undefined) patch.preferences = buildUserPreferences(input.preferences);
+  if (input.emergencyContacts !== undefined)
+    patch.emergencyContacts = buildUserEmergencyContacts(input.emergencyContacts);
+
+  // ---- Compliance
+  if (input.employment !== undefined) patch.employment = buildUserEmployment(input.employment);
+  if (input.compliance !== undefined) patch.compliance = buildUserCompliance(input.compliance);
+  if (input.externalIds !== undefined) patch.externalIds = buildExternalIds(input.externalIds);
+
   if (Object.keys(patch).length === 0) {
     throw new ValidationError('At least one field must be provided');
   }
+
   return patch;
+}
+
+/**
+ * Backwards-compatibility helper: convert new User structure to NextOfKin.
+ */
+export function userToNextOfKin(user: User): NextOfKin | null {
+  const contact = user.emergencyContacts.primaryContact || user.emergencyContacts.nextOfKin;
+  if (!contact) return null;
+  return {
+    fullName: contact.fullName,
+    relationship: contact.relationship,
+    phone: contact.phone,
+    email: contact.email,
+  };
+}
+
+/**
+ * Backwards-compatibility helper: convert new User structure to ContactPerson.
+ */
+export function userToContactPerson(user: User): ContactPerson | null {
+  const contact = user.emergencyContacts.primaryContact;
+  if (!contact) return null;
+  return {
+    fullName: contact.fullName,
+    phone: contact.phone,
+    email: contact.email,
+  };
 }

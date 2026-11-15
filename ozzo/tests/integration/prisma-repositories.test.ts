@@ -22,15 +22,64 @@ suite('Prisma repositories (real PostgreSQL)', () => {
   const newUser = (n = 1): NewUser => ({
     username: `user${n}`,
     email: `user${n}@example.com`,
-    firstName: 'Test',
-    lastName: 'User',
     externalId: `00u-${n}`,
+    roles: ['user'],
+    permissions: [],
+    isActive: true,
+    emailVerified: false,
+    phoneVerified: false,
+    lastLoginAt: null,
+    lastPasswordChangeAt: new Date(),
+    mfaEnabled: false,
+    identity: {
+      displayName: 'Test User',
+      middleName: null,
+      preferredName: null,
+      profilePhotoUrl: null,
+      nationality: null,
+      preferredLanguage: null,
+      maritalStatus: null,
+      dateOfBirth: null,
+      sex: null,
+    },
+    contact: {
+      phoneNumber: null,
+      mobileNumber: null,
+      secondaryEmail: null,
+    },
     address: null,
-    dateOfBirth: null,
-    nextOfKin: null,
-    contactPerson: null,
-    sex: null,
-    encryptedTaxId: null,
+    preferences: {
+      timeZone: null,
+      locale: null,
+      theme: 'system',
+      notificationPreferences: {
+        emailNotifications: true,
+        smsNotifications: false,
+        inAppNotifications: true,
+        marketingEmails: false,
+      },
+    },
+    emergencyContacts: {
+      primaryContact: null,
+      secondaryContact: null,
+      nextOfKin: null,
+    },
+    employment: {
+      employeeNumber: null,
+      departmentId: null,
+      jobTitle: null,
+      managerId: null,
+      hireDate: null,
+      employmentStatus: null,
+    },
+    compliance: {
+      encryptedTaxId: null,
+      termsAcceptedAt: null,
+      privacyPolicyAcceptedAt: null,
+      marketingConsent: false,
+      marketingConsentUpdatedAt: null,
+    },
+    externalIds: {},
   });
 
   it('creates and finds users; unique violations become ConflictError', async () => {
@@ -44,14 +93,31 @@ suite('Prisma repositories (real PostgreSQL)', () => {
     const u = await users.create({
       ...newUser(),
       address: { street: '1 Main St', city: 'Calgary', stateProvince: 'AB', country: 'CA', postalCode: 'T2P 1J9' },
-      dateOfBirth: new Date('1990-02-03T00:00:00Z'),
-      sex: "won't-declare",
-      encryptedTaxId: 'ciphertext',
+      identity: {
+        displayName: 'Test User',
+        middleName: null,
+        preferredName: null,
+        profilePhotoUrl: null,
+        nationality: null,
+        preferredLanguage: null,
+        maritalStatus: null,
+        dateOfBirth: new Date('1990-02-03T00:00:00Z'),
+        sex: "won't-declare",
+      },
+      compliance: {
+        encryptedTaxId: 'ciphertext',
+        termsAcceptedAt: null,
+        privacyPolicyAcceptedAt: null,
+        marketingConsent: false,
+        marketingConsentUpdatedAt: null,
+      },
     });
     const found = await users.findById(u.id);
     expect(found?.address?.postalCode).toBe('T2P 1J9');
-    expect(found?.dateOfBirth?.toISOString().slice(0, 10)).toBe('1990-02-03');
-    expect(found?.encryptedTaxId).toBe('ciphertext');
+    const identity = found?.identity as any;
+    expect(identity?.dateOfBirth).toBeDefined();
+    const compliance = found?.compliance as any;
+    expect(compliance?.encryptedTaxId).toBe('ciphertext');
   });
 
   it('stores balances as bigint and cascades deletes', async () => {

@@ -33,10 +33,11 @@ describe('SIN/SSN handling in user use-cases', () => {
     const dto = await new CreateUserUseCase(users, kms).execute({ ...validUser, address, taxId: '130-692-544' }, ownerActor);
     const stored = [...users.items.values()][0];
     expect(stored).toBeDefined();
-    expect(stored!.encryptedTaxId).toBeTruthy();
-    expect(stored!.encryptedTaxId).not.toContain('130692544');
+    const compliance = (stored?.compliance as any) || {};
+    expect(compliance.encryptedTaxId).toBeTruthy();
+    expect(compliance.encryptedTaxId).not.toContain('130692544');
     await expect(
-      kms.decrypt(stored!.encryptedTaxId as string, { purpose: 'user-tax-id', externalId: ownerActor.sub }),
+      kms.decrypt(compliance.encryptedTaxId as string, { purpose: 'user-tax-id', externalId: ownerActor.sub }),
     ).resolves.toBe('130692544');
     expect(JSON.stringify(dto)).not.toMatch(/130692544|taxId|encryptedTaxId/);
     expect(dto.address?.postalCode).toBe('T2P 1J9');
@@ -60,7 +61,8 @@ describe('SIN/SSN handling in user use-cases', () => {
       ownerActor,
     );
     const stored = ctx.users.items.get(user.id);
-    expect(stored?.encryptedTaxId).toBeTruthy();
+    const compliance = (stored?.compliance as any) || {};
+    expect(compliance.encryptedTaxId).toBeTruthy();
     expect(JSON.stringify(updated)).not.toMatch(/taxId|encryptedTaxId/i);
   });
 

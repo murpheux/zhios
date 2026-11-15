@@ -30,8 +30,19 @@ export const CreateUserRequestSchema = z
   .object({
     username: z.string(),
     email: z.string(),
-    firstName: z.string(),
-    lastName: z.string(),
+    identity: z
+      .object({
+        displayName: z.string(),
+        middleName: z.string().optional(),
+        preferredName: z.string().optional(),
+        dateOfBirth: z.string().optional(), // YYYY-MM-DD
+        sex: z.string().optional(),
+        nationality: z.string().optional(),
+        preferredLanguage: z.string().optional(),
+        maritalStatus: z.string().optional(),
+        profilePhotoUrl: z.string().optional(),
+      })
+      .strict(),
     ...profileRequestShape,
   })
   .strict();
@@ -41,8 +52,20 @@ export const UpdateUserRequestSchema = z
   .object({
     username: z.string().optional(),
     email: z.string().optional(),
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
+    identity: z
+      .object({
+        displayName: z.string().optional(),
+        middleName: z.string().optional(),
+        preferredName: z.string().optional(),
+        dateOfBirth: z.string().optional(), // YYYY-MM-DD
+        sex: z.string().optional(),
+        nationality: z.string().optional(),
+        preferredLanguage: z.string().optional(),
+        maritalStatus: z.string().optional(),
+        profilePhotoUrl: z.string().optional(),
+      })
+      .strict()
+      .optional(),
     ...profileRequestShape,
   })
   .strict();
@@ -53,23 +76,25 @@ export interface UserDto extends UserProfileFieldsDto {
   id: string;
   username: string;
   email: string;
-  firstName: string;
-  lastName: string;
   externalId: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export function toUserDto(user: User): UserDto {
+  const audit = (user.audit as any) || { createdAt: new Date(), updatedAt: new Date() };
+
   return {
     id: user.id,
     username: user.username,
     email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
     externalId: user.externalId,
     ...toProfileFieldsDto(user),
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
+    createdAt: audit.createdAt
+      ? new Date(audit.createdAt).toISOString()
+      : new Date().toISOString(),
+    updatedAt: audit.updatedAt
+      ? new Date(audit.updatedAt).toISOString()
+      : new Date().toISOString(),
   };
 }

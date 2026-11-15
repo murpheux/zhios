@@ -4,8 +4,8 @@
 #
 # ozzo is an auth/subscriptions service with Prisma ORM and PostgreSQL.
 #
-# Stages: builder (npm ci + tsc + prisma generate) -> prod-deps (npm ci --omit=dev + prisma generate)
-#         -> runtime (prod node_modules + compiled dist + prisma schema, node-owned)
+# Stages: builder (npm ci + esbuild + prisma generate) -> prod-deps (npm ci --omit=dev + prisma generate)
+#         -> runtime (prod node_modules + bundled dist + prisma schema, node-owned)
 
 ARG NODE_IMAGE=node:22.22.0-alpine3.22
 
@@ -16,7 +16,7 @@ COPY ozzo/package.json ozzo/package-lock.json ./
 COPY ozzo/prisma ./prisma
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 RUN npx prisma generate
-COPY ozzo/tsconfig.json ozzo/tsconfig.build.json ./
+COPY ozzo/tsconfig.json ozzo/tsconfig.build.json ozzo/esbuild.config.js ./
 COPY ozzo/src ./src
 RUN npm run build
 

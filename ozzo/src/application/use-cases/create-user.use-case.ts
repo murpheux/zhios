@@ -26,7 +26,18 @@ export class CreateUserUseCase {
         purpose: 'user-tax-id',
         externalId: actor.sub,
       });
-      newUser = { ...validated, encryptedTaxId };
+      // Update compliance object with encrypted tax ID
+      const existingCompliance = (validated.compliance as any) || {};
+      newUser = {
+        ...validated,
+        compliance: {
+          encryptedTaxId,
+          termsAcceptedAt: existingCompliance.termsAcceptedAt || null,
+          privacyPolicyAcceptedAt: existingCompliance.privacyPolicyAcceptedAt || null,
+          marketingConsent: existingCompliance.marketingConsent ?? false,
+          marketingConsentUpdatedAt: existingCompliance.marketingConsentUpdatedAt || null,
+        },
+      };
     }
     return toUserDto(await this.users.create(newUser));
   }

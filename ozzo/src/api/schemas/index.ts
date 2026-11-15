@@ -30,13 +30,11 @@ const errorResponses = {
 
 export const userSchema = {
   type: 'object',
-  required: ['id', 'username', 'email', 'firstName', 'lastName', 'externalId', 'createdAt', 'updatedAt'],
+  required: ['id', 'username', 'email', 'externalId', 'createdAt', 'updatedAt'],
   properties: {
     id: uuid,
     username: { type: 'string' },
     email: { type: 'string' },
-    firstName: { type: 'string' },
-    lastName: { type: 'string' },
     externalId: { type: 'string', description: 'Okta user id (JWT sub)' },
     createdAt: dateTime,
     updatedAt: dateTime,

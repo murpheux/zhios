@@ -3,6 +3,7 @@ import type { BankAccountRepository, UserRepository } from '../../src/applicatio
 import {
   ConflictError,
   NotFoundError,
+  buildUserAudit,
   type AccountType,
   type BankAccount,
   type NewBankAccount,
@@ -22,7 +23,11 @@ export class InMemoryUserRepository implements UserRepository {
       }
     }
     const now = new Date();
-    const created: User = { ...user, id: randomUUID(), createdAt: now, updatedAt: now };
+    const created: User = {
+      ...user,
+      id: randomUUID(),
+      audit: buildUserAudit({ createdAt: now, updatedAt: now }),
+    };
     this.items.set(created.id, created);
     return created;
   }

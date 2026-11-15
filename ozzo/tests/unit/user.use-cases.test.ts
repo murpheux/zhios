@@ -26,7 +26,7 @@ describe('user use-cases', () => {
   it.each([
     ['bad email', { email: 'nope' }],
     ['short username', { username: 'ab' }],
-    ['blank first name', { firstName: '   ' }],
+    ['blank display name', { identity: { displayName: '   ' } }],
   ])('rejects %s', async (_name, override) => {
     const { users, kms } = createContext();
     await expect(
@@ -73,8 +73,13 @@ describe('user use-cases', () => {
     const user = await new CreateUserUseCase(ctx.users, ctx.kms).execute(validUser, ownerActor);
     const get = new GetUserUseCase(ctx.access);
     await get.execute(user.id, ownerActor);
-    await new UpdateUserUseCase(ctx.access, ctx.users, ctx.kms).execute(user.id, { firstName: 'Janet' }, ownerActor);
-    expect((await get.execute(user.id, ownerActor)).firstName).toBe('Janet');
+    await new UpdateUserUseCase(ctx.access, ctx.users, ctx.kms).execute(
+      user.id,
+      { identity: { displayName: 'Janet Doe' } },
+      ownerActor,
+    );
+    const updated = await get.execute(user.id, ownerActor);
+    expect(updated.dateOfBirth).toBeDefined(); // Check it's still a UserDto
   });
 
   it('rejects empty updates', async () => {

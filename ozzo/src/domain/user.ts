@@ -20,6 +20,8 @@ import {
   type UserIdentityInput,
   type UserPreferencesInput,
   type UserEmergencyContactsInput,
+  type NextOfKin,
+  type ContactPerson,
 } from './user-profile';
 import {
   buildUserEmployment,
@@ -75,19 +77,7 @@ export interface User {
   audit: UserAudit;
 }
 
-// For backwards compatibility with existing code
-export interface NextOfKin {
-  fullName: string;
-  relationship: string;
-  phone?: string;
-  email?: string;
-}
-
-export interface ContactPerson {
-  fullName: string;
-  phone: string;
-  email?: string;
-}
+// NextOfKin and ContactPerson are exported from ./user-profile.ts
 
 export type NewUser = Omit<User, 'id' | 'audit'>;
 
@@ -224,8 +214,18 @@ export function buildUserPatch(input: UserPatchInput): UserPatch {
   if (input.identity !== undefined) {
     const partial = input.identity as Partial<UserIdentityInput>;
     if (Object.keys(partial).length > 0) {
-      const current = buildUserIdentity({ displayName: 'temp' });
-      patch.identity = { ...current, ...partial };
+      const fullInput: UserIdentityInput = {
+        displayName: partial.displayName || 'temp',
+        middleName: partial.middleName,
+        preferredName: partial.preferredName,
+        dateOfBirth: partial.dateOfBirth,
+        sex: partial.sex,
+        nationality: partial.nationality,
+        preferredLanguage: partial.preferredLanguage,
+        maritalStatus: partial.maritalStatus,
+        profilePhotoUrl: partial.profilePhotoUrl,
+      };
+      patch.identity = buildUserIdentity(fullInput);
     }
   }
   if (input.contact !== undefined) patch.contact = buildUserContact(input.contact);

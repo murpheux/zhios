@@ -1,4 +1,4 @@
-import { normalizeName, normalizePhone, normalizeEmail } from './value-objects';
+import { normalizeName, normalizePhone, normalizeEmail, normalizeDateOfBirth } from './value-objects';
 import { assertMaritalStatus, assertTheme, type MaritalStatus, type Theme } from './enums';
 import { ValidationError } from './errors';
 
@@ -93,6 +93,15 @@ export interface EmergencyContactInput {
 }
 
 /**
+ * Contact person (legacy, for backwards compatibility).
+ */
+export interface ContactPerson {
+  fullName: string;
+  phone: string;
+  email?: string;
+}
+
+/**
  * Next of kin information (legacy, for backwards compatibility).
  */
 export interface NextOfKin {
@@ -151,7 +160,7 @@ function buildIdentity(input: UserIdentityInput): UserIdentity {
     nationality: input.nationality || null,
     preferredLanguage: input.preferredLanguage || null,
     maritalStatus: input.maritalStatus ? assertMaritalStatus(input.maritalStatus) : null,
-    dateOfBirth: null,
+    dateOfBirth: input.dateOfBirth ? normalizeDateOfBirth(input.dateOfBirth) : null,
     sex: input.sex || null,
   };
   if (input.middleName) identity.middleName = normalizeName(input.middleName, 'middleName');

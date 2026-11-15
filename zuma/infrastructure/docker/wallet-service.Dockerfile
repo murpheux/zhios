@@ -2,10 +2,13 @@
 # Build context MUST be the zuma/ repo root, e.g.:
 #   docker build -f infrastructure/docker/wallet-service.Dockerfile -t zuma/wallet-service:<version> .
 # npm workspaces monorepo: wallet-service imports @zuma/shared-* (common, config, logging,
-# observability, http) by workspace symlink, so the builder needs the whole tree.
+# observability, http) by workspace symlink. esbuild bundles all source code into a single JS file;
+# external deps (pino, mongoose, fastify, @aws-sdk/*, @opentelemetry/*, @aws-lambda/*) come from node_modules.
 #
-# Stages: builder (full install + tsc -b) -> prod-deps (npm ci --omit=dev from the lockfile,
-# manifests only) -> runtime (prod node_modules + compiled dist, root-owned, runs as node).
+# NOTE: wallet-service is legacy; transaction-service is the current CRUD handler. See graphql-gateway for current entry point.
+#
+# Stages: builder (full install + esbuild) -> prod-deps (npm ci --omit=dev from the lockfile,
+# manifests only) -> runtime (prod node_modules + bundled dist/wallet-service.js, root-owned, runs as node).
 
 # TODO: pin by digest (docker buildx imagetools inspect node:22.22.0-alpine3.22)
 ARG NODE_IMAGE=node:22.22.0-alpine3.22
@@ -14,8 +17,8 @@ FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 COPY . .
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
-# tsc -b follows project references, so this also builds every shared/* dependency
-RUN npm run build -w @zuma/wallet-service
+# esbuild bundles all source code and shared/* into a single JS file; uses tsconfig for type checking
+RUN npm run build
 
 FROM ${NODE_IMAGE} AS prod-deps
 WORKDIR /app
@@ -38,12 +41,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Files stay root-owned (read-only to the node user); compatible with readOnlyRootFilesystem
 COPY --from=prod-deps /app ./
-COPY --from=builder /app/shared/common/dist ./shared/common/dist
-COPY --from=builder /app/shared/config/dist ./shared/config/dist
-COPY --from=builder /app/shared/logging/dist ./shared/logging/dist
-COPY --from=builder /app/shared/observability/dist ./shared/observability/dist
-COPY --from=builder /app/shared/http/dist ./shared/http/dist
-COPY --from=builder /app/services/wallet-service/dist ./services/wallet-service/dist
+COPY --from=builder /app/dist/wallet-service.js ./dist/wallet-service.js
+COPY --from=builder /app/dist/wallet-service.js.map ./dist/wallet-service.js.map
 
 USER node
 EXPOSE 3001
@@ -51,4 +50,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD ["node", "-e", "require('http').get('http://127.0.0.1:3001/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
 
-CMD ["node", "services/wallet-service/dist/index.js"]
+CMD ["node", "dist/wallet-service.js"]

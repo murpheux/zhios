@@ -1,0 +1,150 @@
+
+> zuma@0.1.0 build
+> npm run typecheck && node esbuild.config.js
+
+
+> zuma@0.1.0 typecheck
+> tsc -b tsconfig.json
+
+
+📦 Building transaction-service...
+✘ [ERROR] No loader is configured for ".md" files: node_modules/newrelic/THIRD_PARTY_NOTICES.md
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".map" files: node_modules/newrelic/node_modules/@grpc/proto-loader/build/bin/proto-loader-gen-types.js.map
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".proto" files: node_modules/newrelic/lib/grpc/endpoints/infinite-tracing/v1.proto
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] Expected ";" but found "License"
+
+    node_modules/newrelic/LICENSE:1:40:
+      1 │                                  Apache License
+        │                                         ~~~~~~~
+        ╵                                         ;
+
+✘ [ERROR] No loader is configured for ".md" files: node_modules/newrelic/NEWS.md
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".map" files: node_modules/newrelic/node_modules/@grpc/proto-loader/build/src/index.js.map
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".md" files: node_modules/newrelic/node_modules/readable-stream/README.md
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] Expected ";" but found "is"
+
+    node_modules/newrelic/node_modules/readable-stream/LICENSE:1:8:
+      1 │ Node.js is licensed for use as follows:
+        │         ~~
+        ╵         ;
+
+✘ [ERROR] No loader is configured for ".md" files: node_modules/newrelic/node_modules/readable-stream/CONTRIBUTING.md
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".md" files: node_modules/newrelic/node_modules/readable-stream/GOVERNANCE.md
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".map" files: node_modules/newrelic/node_modules/@grpc/proto-loader/build/src/util.js.map
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".md" files: node_modules/newrelic/node_modules/@grpc/proto-loader/README.md
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] No loader is configured for ".md" files: node_modules/newrelic/README.md
+
+    node_modules/newrelic/index.js:43:22:
+      43 │   const API = require(`./${apiPath}`)
+         ╵                       ~~~~~~~~~~~~~~
+
+✘ [ERROR] Expected ";" but found "License"
+
+    node_modules/newrelic/node_modules/@grpc/proto-loader/LICENSE:1:40:
+      1 │                                  Apache License
+        │                                         ~~~~~~~
+        ╵                                         ;
+
+✘ [ERROR] Could not resolve "split"
+
+    node_modules/newrelic/bin/tracetractor:23:21:
+      23 │   , split  = require('split')
+         ╵                      ~~~~~~~
+
+  You can mark the path "split" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle. You can also surround this "require" call with a try/catch block to handle this failure at run-time instead of bundle-time.
+
+▲ [WARNING] "../../newrelic" should be marked as external for use with "require.resolve" [require-resolve-not-external]
+
+    node_modules/newrelic/lib/config/index.js:33:41:
+      33 │ const BASE_CONFIG_PATH = require.resolve('../../newrelic')
+         ╵                                          ~~~~~~~~~~~~~~~~
+
+▲ [WARNING] "./worker" should be marked as external for use with "require.resolve" [require-resolve-not-external]
+
+    node_modules/sync-request/lib/index.js:16:34:
+      16 │ var remote = init(require.resolve('./worker'));
+         ╵                                   ~~~~~~~~~~
+
+▲ [WARNING] "./worker" should be marked as external for use with "require.resolve" [require-resolve-not-external]
+
+    node_modules/sync-rpc/lib/index.js:36:53:
+      36 │ ...pawn(process.execPath, [require.resolve('./worker'), port, key], {
+         ╵                                            ~~~~~~~~~~
+
+▲ [WARNING] "./find-port" should be marked as external for use with "require.resolve" [require-resolve-not-external]
+
+    node_modules/sync-rpc/lib/index.js:54:21:
+      54 │     [require.resolve('./find-port')],
+         ╵                      ~~~~~~~~~~~~~
+
+4 warnings and 15 errors
+❌ Build failed: Error: Build failed with 15 errors:
+node_modules/newrelic/LICENSE:1:40: ERROR: Expected ";" but found "License"
+node_modules/newrelic/bin/tracetractor:23:21: ERROR: Could not resolve "split"
+node_modules/newrelic/index.js:43:22: ERROR: No loader is configured for ".map" files: node_modules/newrelic/node_modules/@grpc/proto-loader/build/bin/proto-loader-gen-types.js.map
+node_modules/newrelic/index.js:43:22: ERROR: No loader is configured for ".map" files: node_modules/newrelic/node_modules/@grpc/proto-loader/build/src/index.js.map
+node_modules/newrelic/index.js:43:22: ERROR: No loader is configured for ".map" files: node_modules/newrelic/node_modules/@grpc/proto-loader/build/src/util.js.map
+...
+    at failureErrorWithLog (/Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:1476:15)
+    at /Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:945:25
+    at /Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:897:52
+    at buildResponseToResult (/Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:943:7)
+    at /Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:970:16
+    at responseCallbacks.<computed> (/Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:622:9)
+    at handleIncomingPacket (/Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:677:12)
+    at Socket.readFromStdout (/Users/murpheux/AI_Workspace/Projects/zhios/zuma/node_modules/esbuild/lib/main.js:600:7)
+    at Socket.emit (node:events:509:20)
+    at addChunk (node:internal/streams/readable:568:12) {
+  errors: [Getter/Setter],
+  warnings: [Getter/Setter]
+}

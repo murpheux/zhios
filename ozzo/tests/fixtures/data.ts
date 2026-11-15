@@ -10,6 +10,7 @@ export const adminActor: Actor = { sub: '00u-admin', isAdmin: true, token: 'admi
 export const validUser = {
   username: 'jane.doe',
   email: 'Jane.Doe@Example.com',
-  firstName: 'Jane',
-  lastName: 'Doe',
+  identity: {
+    displayName: 'Jane Doe',
+  },
 };

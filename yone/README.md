@@ -26,6 +26,45 @@ Wire DTOs live in `src/shared/notification.dto.ts` (callers can copy or import t
 
 A channel with no credentials still lets the service boot; its endpoint answers `503 CHANNEL_NOT_CONFIGURED`. Partial configuration (e.g. an API key without a from-address) fails startup.
 
+## Build & Bundling
+
+yone uses **esbuild** for fast, efficient bundling instead of tsc. TypeScript is still used for IDE type-checking and validation (tsconfig.json remains); esbuild handles the production build.
+
+### Build Scripts
+
+```bash
+npm run build          # Production build (minified, NODE_ENV=production)
+npm run build:dev      # Development build (unminified, for debugging)
+npm run dev            # Watch mode via tsx (fast iteration during development)
+npm run start          # Run bundled dist/index.js
+```
+
+### Output
+
+- **Entrypoint**: `src/index.ts`
+- **Bundle**: `dist/index.js` (~1-1.5MB uncompressed)
+- **Externals** (not bundled): `pino`, `fastify`, `@fastify/*`, `zod`, `newrelic` — these must be in `node_modules`
+- **Source maps**: enabled (`.js.map` files for stack trace clarity)
+- **Target**: Node 22
+
+### Why esbuild
+
+- **Speed**: 10x+ faster than tsc for bundling
+- **Size**: Dead-code elimination and minification reduce bundle size
+- **Simplicity**: Single `esbuild.config.mjs` replaces complex build pipelines
+- **Flexibility**: Easy to add plugins, tree-shaking, and output formats
+
+### Docker Integration
+
+The Dockerfile (`infrastructure/docker/yone.Dockerfile`) automatically uses esbuild in the builder stage:
+
+```dockerfile
+COPY yone/esbuild.config.mjs ./
+RUN npm run build    # runs esbuild via npm script
+```
+
+No changes needed when deploying — the image will use the bundled output.
+
 ### Security model
 
 - All `/api/v1/notifications/*` routes need an `x-service-token` header equal (constant-time compare) to one of `ALLOWED_SERVICE_TOKENS` (CSV, each >= 16 chars; required in production). Missing/invalid -> 401. No end-user access.

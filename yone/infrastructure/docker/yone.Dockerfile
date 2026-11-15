@@ -5,14 +5,14 @@
 # yone is a standalone service with no workspace dependencies. The monorepo context is needed
 # only to share shared/* workspaces (if applicable in future); for now, build from yone/ root.
 #
-# Stages: builder (npm ci + tsc) -> prod-deps (npm ci --omit=dev) -> runtime (prod node_modules + dist, node-owned)
+# Stages: builder (npm ci + esbuild) -> prod-deps (npm ci --omit=dev) -> runtime (prod node_modules + dist, node-owned)
 
 ARG NODE_IMAGE=node:22.22.0-alpine3.22
 
 FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 COPY yone/package.json yone/package-lock.json ./
-COPY yone/tsconfig.json ./
+COPY yone/esbuild.config.mjs ./
 COPY yone/src ./src
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 RUN npm run build

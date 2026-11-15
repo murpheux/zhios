@@ -17,18 +17,38 @@ model User {
   id             String        @id @default(uuid()) @db.Uuid
   username       String        @unique
   email          String        @unique
-  firstName      String        @map("first_name")
-  lastName       String        @map("last_name")
   externalId     String        @unique @map("external_id") // Okta user id (JWT sub)
-  address        Json?
-  dateOfBirth    DateTime?     @map("date_of_birth") @db.Date
-  nextOfKin      Json?         @map("next_of_kin")
-  contactPerson  Json?         @map("contact_person")
-  sex            String?
-  encryptedTaxId String?       @map("encrypted_tax_id") // SIN/SSN ciphertext (KMS); never plaintext
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  bankAccounts   BankAccount[]
+
+  // Authentication state
+  isActive             Boolean   @default(true) @map("is_active")
+  emailVerified        Boolean   @default(false) @map("email_verified")
+  phoneVerified        Boolean   @default(false) @map("phone_verified")
+  lastLoginAt          DateTime? @map("last_login_at")
+  lastPasswordChangeAt DateTime? @map("last_password_change_at")
+  mfaEnabled           Boolean   @default(false) @map("mfa_enabled")
+
+  // Roles and permissions (stored as JSON arrays)
+  roles       Json      @default("[]") @db.JsonB
+  permissions Json      @default("[]") @db.JsonB
+
+  // Nested profile objects (JSON structures)
+  identity           Json  @default("{}") @db.JsonB // UserIdentity: displayName, firstName, lastName, dateOfBirth, sex, etc.
+  contact            Json  @default("{}") @db.JsonB // UserContact: phoneNumber, mobileNumber, secondaryEmail
+  address            Json? @db.JsonB // Address: street, city, country, etc.
+  preferences        Json  @default("{}") @db.JsonB // UserPreferences: theme, locale, timeZone, notifications
+  emergencyContacts  Json  @default("{}") @db.JsonB // UserEmergencyContacts: primaryContact, secondaryContact, nextOfKin
+  employment         Json  @default("{}") @db.JsonB // UserEmployment: jobTitle, departmentId, etc.
+  compliance         Json  @default("{}") @db.JsonB // UserCompliance: encryptedTaxId, termsAcceptedAt, etc.
+  externalIds        Json  @default("{}") @db.JsonB // ExternalIds: okta, azureAd, google, etc.
+
+  // Audit trail (separate JSON object)
+  audit Json @default("{}") @db.JsonB // UserAudit: createdBy, updatedBy, deletedAt, isDeleted, etc.
+
+  // Standard timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bankAccounts BankAccount[]
 
   @@map("users")
 }

@@ -1,0 +1,46 @@
+
+> ozzo@0.1.0 build
+> node esbuild.config.js && npm run typecheck
+
+
+  dist/index.js       72.3kb
+  dist/index.js.map  152.9kb
+
+⚡ Done in 16ms
+✓ Bundle built successfully
+
+> ozzo@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+src/application/dtos/profile-fields.dto.ts(33,23): error TS2339: Property 'dateOfBirth' does not exist on type 'User'.
+src/application/dtos/profile-fields.dto.ts(33,42): error TS2339: Property 'dateOfBirth' does not exist on type 'User'.
+src/application/dtos/profile-fields.dto.ts(34,21): error TS2339: Property 'nextOfKin' does not exist on type 'User'.
+src/application/dtos/profile-fields.dto.ts(34,53): error TS2339: Property 'nextOfKin' does not exist on type 'User'.
+src/application/dtos/profile-fields.dto.ts(35,25): error TS2339: Property 'contactPerson' does not exist on type 'User'.
+src/application/dtos/profile-fields.dto.ts(35,65): error TS2339: Property 'contactPerson' does not exist on type 'User'.
+src/application/dtos/profile-fields.dto.ts(36,15): error TS2339: Property 'sex' does not exist on type 'User'.
+src/application/dtos/user.dto.ts(68,21): error TS2339: Property 'firstName' does not exist on type 'User'.
+src/application/dtos/user.dto.ts(69,20): error TS2339: Property 'lastName' does not exist on type 'User'.
+src/application/dtos/user.dto.ts(72,21): error TS2339: Property 'createdAt' does not exist on type 'User'.
+src/application/dtos/user.dto.ts(73,21): error TS2339: Property 'updatedAt' does not exist on type 'User'.
+src/application/use-cases/create-user.use-case.ts(16,36): error TS2345: Argument of type '{ externalId: string; username: string; email: string; firstName: string; lastName: string; nextOfKin?: { fullName: string; relationship: string; phone?: string | undefined; email?: string | undefined; } | undefined; address?: { ...; } | undefined; dateOfBirth?: string | undefined; sex?: string | undefined; contactP...' is not assignable to parameter of type 'NewUserInput'.
+  Property 'identity' is missing in type '{ externalId: string; username: string; email: string; firstName: string; lastName: string; nextOfKin?: { fullName: string; relationship: string; phone?: string | undefined; email?: string | undefined; } | undefined; address?: { ...; } | undefined; dateOfBirth?: string | undefined; sex?: string | undefined; contactP...' but required in type 'NewUserInput'.
+src/application/use-cases/create-user.use-case.ts(29,33): error TS2353: Object literal may only specify known properties, and 'encryptedTaxId' does not exist in type 'NewUser'.
+src/application/use-cases/update-user.use-case.ts(23,13): error TS2339: Property 'encryptedTaxId' does not exist on type 'Partial<Pick<User, "username" | "email" | "isActive" | "phoneVerified" | "mfaEnabled" | "identity" | "contact" | "address" | "preferences" | "emergencyContacts" | "employment" | "compliance" | "externalIds">>'.
+src/domain/index.ts(8,1): error TS2308: Module './user-profile' has already exported a member named 'NextOfKin'. Consider explicitly re-exporting to resolve the ambiguity.
+src/domain/user.ts(228,7): error TS2322: Type '{ middleName: string | null; preferredName: string | null; displayName: string; profilePhotoUrl: string | null; nationality: string | null; preferredLanguage: string | null; maritalStatus: string | null; dateOfBirth: string | ... 1 more ... | null; sex: string | null; }' is not assignable to type 'UserIdentity'.
+  Types of property 'maritalStatus' are incompatible.
+    Type 'string | null' is not assignable to type '"single" | "married" | "divorced" | "widowed" | "registered-partnership" | "prefer-not-to-say" | null'.
+      Type 'string' is not assignable to type '"single" | "married" | "divorced" | "widowed" | "registered-partnership" | "prefer-not-to-say" | null'.
+src/infrastructure/prisma-user.repository.ts(20,20): error TS2339: Property 'nextOfKin' does not exist on type 'NewUser | Partial<Pick<User, "username" | "email" | "isActive" | "phoneVerified" | "mfaEnabled" | "identity" | "contact" | "address" | "preferences" | "emergencyContacts" | "employment" | "compliance" | "externalIds">>'.
+src/infrastructure/prisma-user.repository.ts(20,31): error TS2339: Property 'contactPerson' does not exist on type 'NewUser | Partial<Pick<User, "username" | "email" | "isActive" | "phoneVerified" | "mfaEnabled" | "identity" | "contact" | "address" | "preferences" | "emergencyContacts" | "employment" | "compliance" | "externalIds">>'.
+src/infrastructure/prisma-user.repository.ts(33,5): error TS2353: Object literal may only specify known properties, and 'nextOfKin' does not exist in type 'User'.
+tests/fixtures/in-memory-repositories.ts(25,56): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'User'.
+tests/integration/prisma-repositories.test.ts(25,5): error TS2353: Object literal may only specify known properties, and 'firstName' does not exist in type 'NewUser'.
+tests/integration/prisma-repositories.test.ts(47,7): error TS2353: Object literal may only specify known properties, and 'dateOfBirth' does not exist in type 'NewUser'.
+tests/integration/prisma-repositories.test.ts(53,19): error TS2339: Property 'dateOfBirth' does not exist on type 'User'.
+tests/integration/prisma-repositories.test.ts(54,19): error TS2339: Property 'encryptedTaxId' does not exist on type 'User'.
+tests/unit/sensitive-data.test.ts(36,20): error TS2339: Property 'encryptedTaxId' does not exist on type 'User'.
+tests/unit/sensitive-data.test.ts(37,20): error TS2339: Property 'encryptedTaxId' does not exist on type 'User'.
+tests/unit/sensitive-data.test.ts(39,27): error TS2339: Property 'encryptedTaxId' does not exist on type 'User'.
+tests/unit/sensitive-data.test.ts(63,20): error TS2339: Property 'encryptedTaxId' does not exist on type 'User'.

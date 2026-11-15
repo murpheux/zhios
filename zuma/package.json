@@ -12,8 +12,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -b tsconfig.json",
-    "clean": "tsc -b tsconfig.json --clean",
+    "build": "npm run typecheck && node esbuild.config.js",
+    "clean": "tsc -b tsconfig.json --clean && rimraf dist/",
     "lint": "biome lint .",
     "typecheck": "tsc -b tsconfig.json",
     "test": "npm run build --silent && npm test --workspaces --if-present",
@@ -29,6 +29,7 @@
   "devDependencies": {
     "typescript": "^5.7.2",
     "rimraf": "^6.0.1",
-    "@biomejs/biome": "^2.2.0"
+    "@biomejs/biome": "^2.2.0",
+    "esbuild": "^0.24.0"
   }
 }

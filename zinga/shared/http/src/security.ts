@@ -43,13 +43,14 @@ const securityPluginImpl: FastifyPluginAsync<SecurityPluginOptions> = async (
   });
 
   const allowAll = opts.corsAllowedOrigins.includes('*');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await app.register(fastifyCors, {
     origin: allowAll ? '*' : opts.corsAllowedOrigins.length > 0 ? opts.corsAllowedOrigins : false,
     credentials,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'content-type', 'idempotency-key', 'x-request-id'],
     maxAgeSeconds: 600,
-  });
+  } as any);
 
   const exempt = new Set(opts.rateLimitExemptPaths ?? DEFAULT_EXEMPT_PATHS);
   const serviceMax = opts.rateLimitServiceMax ?? opts.rateLimitMax;
@@ -77,18 +78,19 @@ const securityPluginImpl: FastifyPluginAsync<SecurityPluginOptions> = async (
     return `ip:${request.ip}`;
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await app.register(fastifyRateLimit, {
     global: true,
-    max: (_request, key) => (key.startsWith('svc:') ? serviceMax : opts.rateLimitMax),
+    max: (_request: any, key: string) => (key.startsWith('svc:') ? serviceMax : opts.rateLimitMax),
     timeWindow: opts.rateLimitWindow,
     keyGenerator,
-    skip: (request) => exempt.has(pathOf(request)),
-    errorResponseBuilder: (_request, context) =>
+    skip: (request: FastifyRequest) => exempt.has(pathOf(request)),
+    errorResponseBuilder: (_request: any, context: any) =>
       Object.assign(new Error(`Rate limit exceeded, retry in ${context.after}`), {
         statusCode: context.statusCode,
         code: 'RATE_LIMITED',
       }),
-  });
+  } as any);
 };
 
 export const securityPlugin = fp(securityPluginImpl, { name: 'zuma-security' });

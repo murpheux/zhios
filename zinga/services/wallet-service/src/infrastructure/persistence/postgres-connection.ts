@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import type { Logger } from 'pino';
-import type { PoolClient, QueryResult } from 'pg';
+import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
 
 /**
  * PostgreSQL connection pool factory and lifecycle management.
@@ -52,7 +52,7 @@ export const queryWithTimeout = async (
   query: string,
   values?: unknown[],
   timeoutMs = 10000,
-): Promise<QueryResult<unknown>> => {
+): Promise<QueryResult<Record<string, unknown>>> => {
   const timeout = setTimeout(() => {
     throw new Error(`Query timeout after ${timeoutMs}ms`);
   }, timeoutMs);

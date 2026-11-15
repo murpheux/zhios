@@ -90,7 +90,7 @@ const authPluginImpl: FastifyPluginAsync<AuthPluginOptions> = async (
     // because keys are still fetched on demand.
     app.addHook('onReady', async () => {
       void jwks.getSigningKeys().then(
-        (keys) => app.log.info({ jwksKeys: keys.length }, 'jwks cache warmed'),
+        (keys: any) => app.log.info({ jwksKeys: keys.length }, 'jwks cache warmed'),
         (error: unknown) =>
           app.log.warn({ jwksError: (error as { message?: string }).message }, 'jwks warm-up failed; keys will be fetched on demand'),
       );

@@ -30,9 +30,9 @@ describe('internal wallet routes (/internal, x-service-token)', () => {
   });
 
   const debit = (id: string, payload: Record<string, unknown>, headers = h.serviceHeaders('transaction-service')) =>
-    h.app.inject({ method: 'POST', url: `/internal/wallets/${id}/debits`, headers: headers as Headers, payload });
+    h.app.inject({ method: 'POST', url: `/internal/wallets/${id}/debits`, headers: headers as any, payload });
   const credit = (id: string, payload: Record<string, unknown>, headers = h.serviceHeaders('transaction-service')) =>
-    h.app.inject({ method: 'POST', url: `/internal/wallets/${id}/credits`, headers: headers as Headers, payload });
+    h.app.inject({ method: 'POST', url: `/internal/wallets/${id}/credits`, headers: headers as any, payload });
 
   describe('service authentication', () => {
     const foreignSigner = createServiceTokenSigner({
@@ -50,7 +50,7 @@ describe('internal wallet routes (/internal, x-service-token)', () => {
       ['a caller that is not allow-listed', () => h.serviceHeaders('graphql-gateway'), 403, 'FORBIDDEN'],
     ])('rejects %s', async (_name, headers, status, code) => {
       const wallet = h.wallets.seed({ balanceSats: 5000 });
-      const hdrs = headers() as Headers;
+      const hdrs = headers() as any;
       for (const res of [
         await h.app.inject({ method: 'GET', url: `/internal/wallets/${wallet.id}`, headers: hdrs }),
         await debit(wallet.id, { transactionId: TX_ID, amountSats: '100' }, hdrs),

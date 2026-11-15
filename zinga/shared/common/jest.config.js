@@ -12,7 +12,7 @@ module.exports = {
     '^.+\\.ts$': ['ts-jest', { isolatedModules: true }],
   },
   moduleNameMapper: {
-    '^@zuma/shared-([a-z]+)$': '<rootDir>/../$1/src',
+    '^@zinga/shared-([a-z]+)$': '<rootDir>/../$1/src',
   },
   collectCoverageFrom: ['src/**/*.ts', '!src/index.ts', '!src/**/*.d.ts'],
   coverageReporters: ['text-summary', 'lcov', 'json-summary'],

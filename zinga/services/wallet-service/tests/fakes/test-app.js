@@ -27,6 +27,10 @@ const testEnv = (overrides = {}) => ({
     METRICS_ENABLED: 'false',
     DOCS_ENABLED: 'false',
     CORS_ALLOWED_ORIGINS: exports.ALLOWED_ORIGIN,
+    LEDGER_VERIFICATION_ENABLED: 'true',
+    LEDGER_VERIFICATION_INTERVAL_MS: '3600000',
+    TAMPER_DETECTION_ENABLED: 'true',
+    TAMPER_DETECTION_LOG_ERRORS: 'true',
     ...overrides,
 });
 exports.testEnv = testEnv;

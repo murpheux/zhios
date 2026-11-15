@@ -14,7 +14,7 @@ import { ALLOWED_ORIGIN, buildTestApp } from '../fakes/test-app';
 const METRICS_TOKEN = 'metrics-token-0123456789';
 
 describe('wallet-service platform wiring', () => {
-  const apps: FastifyInstance[] = [];
+  const apps: FastifyInstance<any, any, any, any>[] = [];
   const make = async (env: Record<string, string | undefined> = {}) => {
     const harness = await buildTestApp(env);
     apps.push(harness.app);

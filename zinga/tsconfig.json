@@ -16,12 +16,18 @@
       "@zinga/api/*": ["./services/wallet-service/src/api/*"],
       "@zinga/config/*": ["./services/wallet-service/src/config/*"],
       "@zinga/shared-common": ["./shared/common/src"],
-      "@zinga/shared-http": ["./shared/http/src"]
+      "@zinga/shared-http": ["./shared/http/src"],
+      "@zinga/shared-config": ["./shared/config/src"],
+      "@zinga/shared-logging": ["./shared/logging/src"],
+      "@zinga/shared-observability": ["./shared/observability/src"]
     }
   },
   "references": [
     { "path": "./services/wallet-service" },
     { "path": "./shared/common" },
-    { "path": "./shared/http" }
+    { "path": "./shared/http" },
+    { "path": "./shared/config" },
+    { "path": "./shared/logging" },
+    { "path": "./shared/observability" }
   ]
 }

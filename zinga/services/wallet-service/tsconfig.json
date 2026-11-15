@@ -21,7 +21,10 @@
       "@zinga/api/*": ["src/api/*"],
       "@zinga/config/*": ["src/config/*"],
       "@zinga/shared-common": ["../../shared/common/src"],
-      "@zinga/shared-http": ["../../shared/http/src"]
+      "@zinga/shared-http": ["../../shared/http/src"],
+      "@zinga/shared-config": ["../../shared/config/src"],
+      "@zinga/shared-logging": ["../../shared/logging/src"],
+      "@zinga/shared-observability": ["../../shared/observability/src"]
     },
     "composite": true
   },
@@ -39,6 +42,15 @@
     },
     {
       "path": "../../shared/http"
+    },
+    {
+      "path": "../../shared/config"
+    },
+    {
+      "path": "../../shared/logging"
+    },
+    {
+      "path": "../../shared/observability"
     }
   ]
 }

@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@zinga/domain/*": ["src/domain/*"],
+      "@zinga/application/*": ["src/application/*"],
+      "@zinga/infrastructure/*": ["src/infrastructure/*"],
+      "@zinga/api/*": ["src/api/*"],
+      "@zinga/config/*": ["src/config/*"],
+      "@zinga/shared-common": ["../../shared/common/src"],
+      "@zinga/shared-http": ["../../shared/http/src"]
+    },
+    "composite": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "**/*.test.ts"
+  ],
+  "references": [
+    {
+      "path": "../../shared/common"
+    },
+    {
+      "path": "../../shared/http"
+    }
+  ]
+}

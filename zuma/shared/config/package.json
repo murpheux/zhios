@@ -10,9 +10,9 @@
     "test:coverage": "jest --coverage --testPathIgnorePatterns repository --json --outputFile=coverage/test-results.json"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "^5.7.2"
   }
 }

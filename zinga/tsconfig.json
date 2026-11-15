@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@zinga/domain/*": ["./services/wallet-service/src/domain/*"],
+      "@zinga/application/*": ["./services/wallet-service/src/application/*"],
+      "@zinga/infrastructure/*": ["./services/wallet-service/src/infrastructure/*"],
+      "@zinga/api/*": ["./services/wallet-service/src/api/*"],
+      "@zinga/config/*": ["./services/wallet-service/src/config/*"],
+      "@zinga/shared-common": ["./shared/common/src"],
+      "@zinga/shared-http": ["./shared/http/src"]
+    }
+  },
+  "references": [
+    { "path": "./services/wallet-service" },
+    { "path": "./shared/common" },
+    { "path": "./shared/http" }
+  ]
+}

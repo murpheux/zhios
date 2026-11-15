@@ -114,13 +114,15 @@ Sensitive credentials (from 1Password, environment, or Secrets Manager):
 - `TEAMS_WEBHOOK_URLS`: JSON map of target names to Teams webhook URLs (optional)
 - `NEW_RELIC_LICENSE_KEY`: New Relic license (optional, only if NEW_RELIC_ENABLED=true in ConfigMap)
 
-Example secret values (DO NOT commit these):
+Example secret values (DO NOT commit these; use 1Password or AWS Secrets Manager):
 
 ```bash
 ALLOWED_SERVICE_TOKENS="service-token-1,service-token-2"
 SLACK_WEBHOOK_URLS='{"alerts":"<slack-webhook-url-from-1password>"}'
-TEAMS_WEBHOOK_URLS='{"devops":"https://mycompany.webhook.office.com/webhookb2/..."}'
+TEAMS_WEBHOOK_URLS='{"devops":"<teams-webhook-url-from-1password>"}'
 ```
+
+**Note:** Obtain actual webhook URLs from 1Password (`op://zhios/yone-slack-webhook`) or AWS Secrets Manager. Never commit real webhook URLs to source control.
 
 ## Service-to-Service Communication
 
